@@ -1,7 +1,7 @@
-# 香港科技岗求职作品集 / HK Tech Job Portfolio
+# Portfolio Projects / 作品集
 
-> 为求职香港科技行业（数据分析师、AI 应用工程师、技术运营）而构建的 3 个实战项目。
-> Three hands-on projects for Hong Kong tech job applications (Data Analyst, AI Application Engineer, Tech Operations).
+> 3 个实战项目 — AI 文案生成器、社媒数据分析器、自动化工作流引擎。
+> Three hands-on projects: AI Copywriting Tool, Social Media Analyzer, Automation Workflow Engine.
 
 ---
 
@@ -71,10 +71,10 @@ python app.py
 
 ---
 
-## 关于作者 / About
+## 关于 / About
 
-钟嘉禧 (Zhong Jiaxi) — 香港科技岗求职者，专注数据与 AI 应用方向。
+钟嘉禧 (Zhong Jiaxi)
 MSc Chinese Environmental Studies, HKMU (2026-2027) · CS/Big Data 本科。
 
 - GitHub: [@xi195072-a11y](https://github.com/xi195072-a11y)
-- 求职方向: Data Analyst · AI Application Engineer · Tech Operations
+- 方向: Data Analyst · AI Application Engineer · Tech Operations
