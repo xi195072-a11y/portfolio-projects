@@ -48,7 +48,8 @@ python app.py
 
 ## Screenshots (截图)
 
-> TODO: Add screenshots after initial implementation.
+> Screenshots will be added after local runtime testing.
+> 截图将在本地运行测试后添加。
 
 ## Deployment (部署)
 
