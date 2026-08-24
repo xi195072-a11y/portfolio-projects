@@ -73,7 +73,7 @@ python app.py
 
 ## 关于 / About
 
-钟嘉禧 (Zhong Jiaxi)
+小希
 MSc Chinese Environmental Studies, HKMU (2026-2027) · CS/Big Data 本科。
 
 - GitHub: [@xi195072-a11y](https://github.com/xi195072-a11y)
