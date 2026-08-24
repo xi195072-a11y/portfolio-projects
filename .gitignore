@@ -39,6 +39,7 @@ env/
 # Gradio
 gradio_cached_examples/
 flagged/
+.gradio/
 
 # OS
 .DS_Store

@@ -28,15 +28,18 @@ He needs these projects to be **interview-ready** — he must understand every l
 
 ## Current Project Status
 
-### ✅ Project 01: AI Copywriting Tool (In Progress)
+### ✅ Project 01: AI Copywriting Tool (DeepSeek Integrated — Testing Phase)
 - **Folder:** `01-ai-copywriting-tool/`
 - **Files exist:** `app.py`, `requirements.txt`, `README.md`
-- **What's done:** Gradio UI scaffolded, OpenAI code written (needs DeepSeek replacement)
+- **What's done:**
+  - Gradio UI scaffolded
+  - DeepSeek API integrated (base_url + model `deepseek-chat` + `DEEPSEEK_API_KEY` env var)
+  - `requirements.txt` pinned (`gradio==6.19.0`, `openai==3.3.1`)
+  - README has HuggingFace Spaces frontmatter
+  - `app.py` raises clear `RuntimeError` if `DEEPSEEK_API_KEY` is missing
 - **What's needed:**
-  - Replace OpenAI client with DeepSeek API (compatible format, just change base URL and model name)
-  - Add DeepSeek API key handling via environment variable `DEEPSEEK_API_KEY`
-  - Test locally with Gradio
-  - Prepare for HuggingFace Spaces deployment
+  - Test locally with Gradio (`python app.py`)
+  - Deploy to HuggingFace Spaces
 
 ### 🔴 Project 02: Social Media Data Analyzer (Not Started)
 - **Folder:** `02-social-media-analyzer/` (create when ready)
@@ -184,15 +187,14 @@ def process(data):
 
 ## What to Do Right Now
 
-The immediate next step is to **fix Project 01** by replacing OpenAI with DeepSeek:
+Project 01 DeepSeek integration is **complete**. Remaining steps:
 
-1. Read `01-ai-copywriting-tool/app.py`
-2. Replace the OpenAI client initialization with DeepSeek pattern (see above)
-3. Update `requirements.txt` to include `openai` package (DeepSeek uses OpenAI's SDK)
-4. Add a note in README about DeepSeek API key setup
-5. Test that the app runs locally
+1. Test locally: set `DEEPSEEK_API_KEY` env var, run `python app.py` (app starts at http://localhost:7860)
+2. Deploy to HuggingFace Spaces:
+   - Upload `app.py`, `requirements.txt`, `README.md`
+   - Add `DEEPSEEK_API_KEY` as a Space secret (Settings → Secrets)
 
-After Project 01 is complete, move to Project 02.
+After Project 01 is deployed, move to Project 02.
 
 ---
 

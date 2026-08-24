@@ -1,3 +1,14 @@
+---
+title: AI Copywriting Tool
+emoji: ✍️
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: 6.19.0
+app_file: app.py
+pinned: false
+---
+
 # AI Copywriting Tool (AI 文案生成器)
 
 A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Gradio and DeepSeek API, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length.
@@ -67,7 +78,8 @@ Run the application:
 python app.py
 ```
 
-The app will start at `http://localhost:7860` and provide a public URL for sharing.
+The app will start at `http://localhost:7860` (local only, no public tunnel by default).
+应用启动在 `http://localhost:7860`（仅本地访问，默认不开公网链接）。
 
 ## Deploy to HuggingFace Spaces (部署到 HuggingFace Spaces)
 
@@ -83,7 +95,8 @@ The app will start at `http://localhost:7860` and provide a public URL for shari
 01-ai-copywriting-tool/
 ├── app.py                  # Main Gradio application (主程序)
 ├── requirements.txt        # Python dependencies (依赖)
-── README.md              # This file (说明文档)
+├── .env.example            # Example env config (环境变量示例)
+└── README.md               # This file (说明文档)
 ```
 
 ## How It Works (工作原理)
@@ -119,7 +132,11 @@ Update the `lang_map` dictionary and dropdown choices.
 
 ## Screenshots (截图)
 
-*Add screenshots of your app running here*
+### Main UI / 主界面
+![Main UI](screenshots/main-ui.png)
+
+### Generated Output / 生成结果
+![Generated Copy](screenshots/generated-output.png)
 
 ## Future Enhancements (未来改进)
 
