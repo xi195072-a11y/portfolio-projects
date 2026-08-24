@@ -1,22 +1,39 @@
-# AI Copywriting Tool
+# AI Copywriting Tool (AI 文案生成器)
 
-A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Gradio and OpenAI GPT-3.5, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length.
+A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Gradio and DeepSeek API, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length.
 
-## Features
+基于 Gradio 和 DeepSeek API 的 AI 文案生成工具，支持多语言（中文、英文、粤语）和可定制的语气/长度。
 
-- **Multi-language Support**: Generate copy in Chinese, English, or Cantonese
-- **Customizable Tone**: Professional, Casual, Humorous, Inspirational, or Urgent
-- **Flexible Length**: Short (50-100 words), Medium (100-200 words), or Long (200-300 words)
-- **One-Click Deployment**: Launch locally or share via Gradio public URL
-- **Example Templates**: Pre-built examples for quick testing
+## Features (功能)
 
-## Tech Stack
+- **Multi-language Support**: Generate copy in Chinese, English, or Cantonese (支持中文、英文、粤语)
+- **Customizable Tone**: Professional, Casual, Humorous, Inspirational, or Urgent (5 种语气可选)
+- **Flexible Length**: Short (50-100 words), Medium (100-200 words), or Long (200-300 words) (3 种长度可选)
+- **One-Click Deployment**: Launch locally or deploy to HuggingFace Spaces (本地运行或部署到 HuggingFace)
+- **Example Templates**: Pre-built examples for quick testing (内置示例模板)
+
+## Tech Stack (技术栈)
 
 - **Frontend**: Gradio (Python UI framework)
-- **AI Model**: OpenAI GPT-3.5-turbo
-- **Language**: Python 3.8+
+- **AI Model**: DeepSeek API (`deepseek-chat`) — OpenAI-compatible, cost-effective
+- **Language**: Python 3.12+
 
-## Installation
+## Architecture (架构)
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Gradio    │────▶│  DeepSeek    │────▶│  Generated  │
+│     UI      │     │    API       │     │    Copy     │
+└─────────────     └──────────────┘     └─────────────┘
+       │                    ▲
+       │                    │
+       ▼                    │
+  User Input          API Key (env)
+(topic, tone,
+ length, lang)
+```
+
+## Installation (安装)
 
 1. Clone this repository:
 ```bash
@@ -29,19 +46,21 @@ cd portfolio-projects/01-ai-copywriting-tool
 pip install -r requirements.txt
 ```
 
-3. Set your OpenAI API key:
+3. Set your DeepSeek API key:
 ```bash
 # Windows (PowerShell)
-$env:OPENAI_API_KEY="your-api-key-here"
+$env:DEEPSEEK_API_KEY="your-api-key-here"
 
 # Windows (CMD)
-set OPENAI_API_KEY=your-api-key-here
+set DEEPSEEK_API_KEY=your-api-key-here
 
 # macOS/Linux
-export OPENAI_API_KEY="your-api-key-here"
+export DEEPSEEK_API_KEY="your-api-key-here"
 ```
 
-## Usage
+Get your API key at: https://platform.deepseek.com/
+
+## Usage (使用)
 
 Run the application:
 ```bash
@@ -50,26 +69,34 @@ python app.py
 
 The app will start at `http://localhost:7860` and provide a public URL for sharing.
 
-## Project Structure
+## Deploy to HuggingFace Spaces (部署到 HuggingFace Spaces)
+
+1. Create a new Space at https://huggingface.co/new-space
+2. Select **Gradio** as the SDK
+3. Upload `app.py` and `requirements.txt`
+4. Add `DEEPSEEK_API_KEY` as a Space secret (Settings → Secrets)
+5. Your app is live!
+
+## Project Structure (项目结构)
 
 ```
 01-ai-copywriting-tool/
-├── app.py                  # Main Gradio application
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+├── app.py                  # Main Gradio application (主程序)
+├── requirements.txt        # Python dependencies (依赖)
+── README.md              # This file (说明文档)
 ```
 
-## How It Works
+## How It Works (工作原理)
 
-1. User inputs topic, selects tone, length, and language
-2. Gradio UI sends parameters to `generate_copy()` function
-3. Function constructs a prompt for OpenAI API
-4. GPT-3.5 generates marketing copy based on the prompt
-5. Result is displayed in the UI
+1. User inputs topic, selects tone, length, and language (用户输入主题、选择语气、长度和语言)
+2. Gradio UI sends parameters to `generate_copy()` function (Gradio 界面将参数发送给函数)
+3. Function constructs a prompt for DeepSeek API (函数构建提示词)
+4. DeepSeek generates marketing copy based on the prompt (DeepSeek 生成文案)
+5. Result is displayed in the UI (结果显示在界面)
 
-## Customization
+## Customization (自定义)
 
-### Add More Tones
+### Add More Tones (添加更多语气)
 Edit the `gr.Dropdown` in `app.py`:
 ```python
 gr.Dropdown(
@@ -78,36 +105,36 @@ gr.Dropdown(
 )
 ```
 
-### Change AI Model
+### Change AI Model (更换 AI 模型)
 Modify the model parameter in `app.py`:
 ```python
 response = client.chat.completions.create(
-    model="gpt-4",  # Change to GPT-4 or other models
+    model="deepseek-chat",  # Or other DeepSeek models
     ...
 )
 ```
 
-### Add More Languages
+### Add More Languages (添加更多语言)
 Update the `lang_map` dictionary and dropdown choices.
 
-## Screenshots
+## Screenshots (截图)
 
 *Add screenshots of your app running here*
 
-## Future Enhancements
+## Future Enhancements (未来改进)
 
-- [ ] Add image generation for social media posts
-- [ ] Support more languages (Japanese, Korean, etc.)
-- [ ] Add copy history and favorites
-- [ ] Integrate with social media APIs for direct posting
-- [ ] Add A/B testing for multiple copy variations
+- [ ] Add image generation for social media posts (添加配图生成)
+- [ ] Support more languages (Japanese, Korean, etc.) (支持更多语言)
+- [ ] Add copy history and favorites (添加文案历史和收藏)
+- [ ] Integrate with social media APIs for direct posting (集成社交媒体 API 直接发布)
+- [ ] Add A/B testing for multiple copy variations (添加 A/B 测试)
 
-## Author
+## Author (作者)
 
-**Zhong Jiaxi**
+**Zhong Jiaxi (钟嘉禧)**
 - GitHub: [@xi195072-a11y](https://github.com/xi195072-a11y)
 - Email: 1005270675@qq.com
 
-## License
+## License (许可证)
 
 MIT License - feel free to use this project for learning or commercial purposes.
