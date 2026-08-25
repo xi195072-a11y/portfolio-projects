@@ -1,6 +1,6 @@
 # AGENTS.md - 02 项目：社媒数据分析与可视化
 
-> 通用规则母版：`../../knowledge-base/项目模板/AGENTS.md`
+> 通用规则母版：`../knowledge-base/项目模板/AGENTS.md`
 > 本项目只写特有规则，通用规则见母版
 
 ---

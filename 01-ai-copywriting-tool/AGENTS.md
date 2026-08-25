@@ -1,6 +1,6 @@
 # AGENTS.md - 01 项目：三语社媒文案生成器
 
-> 通用规则母版：`../../knowledge-base/项目模板/AGENTS.md`
+> 通用规则母版：`../knowledge-base/项目模板/AGENTS.md`
 > 本项目只写特有规则，通用规则见母版
 
 ---
