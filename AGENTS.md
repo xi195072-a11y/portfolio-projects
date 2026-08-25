@@ -1,42 +1,70 @@
-# AGENTS.md - 02 项目：社媒数据分析与可视化
+# AGENTS.md - 通用规则母版
 
 > 最后更新：2026-08-25
-> 项目状态：开发中
+> 适用范围：portfolio-projects 下所有子项目
+> 维护者：每次项目复盘后更新
 
 ---
 
-## 项目概述
+## 说明
 
-**02-social-media-analyzer**：AI 驱动的社媒数据分析与可视化工具
+本文件是**通用规则母版**，包含所有子项目共享的技术规范、产品思维、代码标准。
 
-**核心价值**：
-- 自动抓取竞品社媒数据（抖音/小红书/微博）
-- AI 分析趋势、亮点、问题
-- 生成可视化报告
-- 定时推送日报
+**子项目 AGENTS.md 只需写项目特有内容**，开头注明：
+```markdown
+# 本项目继承根目录 AGENTS.md 的通用规则
+# 以下是项目特有规则
+```
 
-**目标用户**：
-- 中小企业主、市场运营人员
-- 需要快速了解竞品动态，节省人工分析时间
+**Trae 读取逻辑**：
+1. 打开子项目 → 读 `子项目/AGENTS.md`
+2. 看到"继承根目录" → 再读 `../AGENTS.md`（本文件）
+3. 合并两者，通用规则 + 项目特有规则 = 完整上下文
 
 ---
 
-## 技术栈
+## 技术栈（通用）
 
 | 组件 | 选型 | 说明 |
 |------|------|------|
 | **编程语言** | Python 3.12 | 主力语言 |
-| **AI 框架** | LangChain 0.3.x | Agent + RAG 编排 |
-| **向量数据库** | ChromaDB | 本地轻量，开发阶段够用 |
-| **Embedding 模型** | BAAI/bge-small-zh-v1.5 | 中文效果好，本地运行免费 |
 | **LLM 大模型** | DeepSeek API | OpenAI 兼容接口 |
 | **前端框架** | Streamlit | 快速搭建 Web 界面 |
-| **数据抓取** | Playwright | 浏览器自动化 |
 | **部署平台** | Streamlit Cloud | 免费部署 |
+
+### 项目特有技术栈（按需选用）
+
+| 组件 | 选型 | 适用项目 |
+|------|------|----------|
+| **AI 框架** | LangChain 0.3.x | 需要 Agent/RAG 的项目（如 02） |
+| **向量数据库** | ChromaDB | RAG 项目 |
+| **Embedding 模型** | BAAI/bge-small-zh-v1.5 | RAG 项目 |
+| **数据抓取** | Playwright | 需要爬虫的项目 |
 
 ---
 
-## RAG 实现规则
+## API 调用规范
+
+### DeepSeek API
+- **API Base**: `https://api.deepseek.com/v1`
+- **Temperature**:
+  - 创意类（文案/故事）: 0.7
+  - 分析类（数据/报告）: 0.1
+- **Max Tokens**:
+  - Short（标题/钩子）: 180
+  - Medium（正文）: 350
+  - Long（完整报告）: 550
+- **缓存机制**: 相同输入不重复调用 API（节省成本）
+
+### Prompt 设计规则（宝玉三点半法则）
+1. **Context（上下文）**：把参考内容直接放入 prompt，别只给链接
+2. **Instruction（指令）**：用"怎么做"替代"别做什么"
+3. **Atom（原子化）**：单次任务规模要小，每个 prompt 自成一体
+4. **CoT（思维链）**：复杂任务先生成大纲，再填充内容
+
+---
+
+## RAG 实现规则（适用于需要知识库的项目）
 
 ### 文档处理
 - **chunk_size**: 500-800 字符（中文场景）
@@ -60,7 +88,7 @@ prompt = "基于以下上下文回答问题。如果上下文没有相关信息�
 
 ---
 
-## Agent 开发规则
+## Agent 开发规则（适用于需要自动化的项目）
 
 ### 工具调用
 - **协议**: 优先使用 MCP 协议（Model Context Protocol）
@@ -93,12 +121,12 @@ prompt = "基于以下上下文回答问题。如果上下文没有相关信息�
 8. 差异化价值是什么？
 
 ### MVP 策略
-- **第一版只做**: 输入竞品账号 → 抓取 7 天数据 → AI 生成报告 → 显示图表
-- **以后再加**: 定时抓取、多平台对比、自动推送、用户系统
+- 第一版只做核心功能，验证需求
+- 以后再加边缘功能
 
 ### 任务闭环
-- 不是"AI 分析数据"（单点功能）
-- 而是"从数据抓取到报告推送的全流程自动化"（完整闭环）
+- 不是"AI 做 XX"（单点功能）
+- 而是"从输入到输出的全流程自动化"（完整闭环）
 
 ---
 
@@ -109,27 +137,24 @@ prompt = "基于以下上下文回答问题。如果上下文没有相关信息�
 - 函数/类必须写 docstring
 - 类型提示（Type Hints）必须写
 
-### 项目结构
+### 项目结构（标准模板）
 ```
-02-social-media-analyzer/
-├── app.py                 # Streamlit 主入口
+项目名/
+── app.py                 # Streamlit 主入口
 ├── requirements.txt       # 依赖
-├── AGENTS.md             # 本文件（项目规则）
+├── AGENTS.md             # 项目规则（继承根目录）
 ├── src/
-│   ├── crawler/          # 数据抓取模块
-│   ├── analyzer/         # AI 分析模块
-│   ├── rag/              # RAG 知识库模块
-│   └── reporter/         # 报告生成模块
+│   ├── modules/          # 业务模块
+│   └── utils/            # 工具函数
 ├── data/                 # 数据存储
-├── chroma_db/            # 向量数据库
-└── tests/                # 测试
+── tests/                # 测试
 ```
 
-### API 调用规范
-- **DeepSeek API Base**: `https://api.deepseek.com/v1`
-- **Temperature**: 0.1（分析任务需要确定性）
-- **Max Tokens**: Short 180 / Medium 350 / Long 550
-- **缓存机制**: 相同输入不重复调用 API
+### UI/UX 规则
+- **API Key 输入框**: Secrets 存在时只显示"已设置"，不填充输入框 value
+- **复制按钮**: 每个输出块都要有复制按钮
+- **加载状态**: API 调用时显示 loading 动画
+- **错误提示**: API 失败时显示友好错误信息
 
 ---
 
@@ -138,18 +163,22 @@ prompt = "基于以下上下文回答问题。如果上下文没有相关信息�
 ### Streamlit Cloud
 - **账号**: xi195072-a11y
 - **Secrets**: DEEPSEEK_API_KEY（必须配置）
-- **API Key 输入框**: Secrets 存在时只显示"已设置"，不填充输入框 value
+- **部署流程**: Workspace Settings → Connect here → 填仓库名（不填用户名）
 
 ### 环境变量
 ```bash
 DEEPSEEK_API_KEY=sk-xxx
-CHROMA_DB_PATH=./chroma_db
-EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+# 项目特有变量写在这里
 ```
 
 ---
 
-## 避坑指南
+## 避坑指南（通用）
+
+### API 调用
+1. 相同输入必须缓存，避免重复扣费
+2. Temperature 按任务类型设置（创意 0.7/分析 0.1）
+3. Max Tokens 按内容长度分级（Short/Medium/Long）
 
 ### RAG 相关
 1. 文档入库不能只做一次，必须做增量更新
@@ -171,6 +200,52 @@ EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
 
 ---
 
+## 项目复盘与知识沉淀规则 ⭐
+
+### 触发时机
+每个项目阶段结束时（MVP 完成/功能上线/重大 bug 修复后）
+
+### 复盘流程
+
+**第一步：记录新问题和解法**
+在项目 `复盘记录.md` 中追加：
+```markdown
+## 2026-08-25 复盘
+
+### 遇到的问题
+1. [问题描述]
+2. [问题描述]
+
+### 解决方法
+1. [解法 + 代码片段]
+2. [解法 + 代码片段]
+
+### 根本原因
+- [为什么会出这个问题]
+
+### 预防措施
+- [以后怎么避免]
+```
+
+**第二步：比对 AGENTS.md**
+检查新问题是否已被"避坑指南"覆盖：
+- **已覆盖** → 不用管
+- **未覆盖** → 追加到对应分类（RAG/Agent/产品/通用）
+
+**第三步：更新知识库**
+如果问题有通用价值（其他项目也会遇到）：
+1. 在 `knowledge-base/学习笔记/` 创建新笔记
+2. 或追加到已有相关笔记
+3. 笔记里加双链关联到 AGENTS.md
+
+### 自动化建议
+未来可以用脚本自动扫描：
+- 项目 `复盘记录.md` 的新增内容
+- 比对 `AGENTS.md` 的"避坑指南"
+- 生成待更新列表
+
+---
+
 ## 学习资源
 
 ### 内部知识库
@@ -179,35 +254,25 @@ EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
 - `../knowledge-base/学习笔记/产品思维详解 - 从需求出发做 AI 产品.md`
 - `../knowledge-base/学习笔记/LangChain-RAG 企业知识库实战代码.md`
 - `../knowledge-base/学习笔记/Coze 扣子-Dify 平台对比研究.md`
+- `../knowledge-base/博主笔记/宝玉-dotey.md` - 提示词三点半法则
+- `../knowledge-base/博主笔记/熠辉-yihui_indie.md` - 工具栈和方法论
+- `../knowledge-base/博主笔记/苍何-canghe.md` - MCP 和 Agent 实战
+- `../knowledge-base/博主笔记/刘小排-bourneliu66.md` - 一人公司 MVP 策略
 
 ### 外部参考
 - LangChain 官方文档：https://python.langchain.com/
 - ChromaDB 官方教程：https://docs.trychroma.com/
 - DeepSeek API 文档：https://platform.deepseek.com/
+- Streamlit 文档：https://docs.streamlit.io/
 
 ---
 
-## 开发计划
+## 维护记录
 
-### 第 1 周：数据抓取
-- [ ] 用 Playwright 抓取竞品数据
-- [ ] 存储到 SQLite 数据库
-- [ ] 测试数据质量
-
-### 第 2 周：AI 分析
-- [ ] 用 DeepSeek API 分析数据
-- [ ] 设计 prompt（分析方法论）
-- [ ] 生成文字报告
-
-### 第 3 周：前端界面
-- [ ] 用 Streamlit 搭建界面
-- [ ] 显示数据表格和图表
-- [ ] 添加交互功能
-
-### 第 4 周：测试部署
-- [ ] 功能测试、修复 bug
-- [ ] 部署到 Streamlit Cloud
-- [ ] 写 README 文档
+| 日期 | 更新内容 | 触发原因 |
+|------|----------|----------|
+| 2026-08-25 | 初始版本 | 项目启动 |
+| 2026-08-25 | 加入项目复盘规则 | 用户需求：让 AI 自动沉淀经验 |
 
 ---
 
