@@ -3,17 +3,16 @@ title: AI Copywriting Tool
 emoji: ✍️
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-sdk_version: 6.19.0
-app_file: app.py
+sdk: streamlit
+app_file: streamlit_app.py
 pinned: false
 ---
 
 # AI Copywriting Tool (AI 文案生成器)
 
-A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Gradio and DeepSeek API, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length.
+A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Streamlit and DeepSeek API, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length.
 
-基于 Gradio 和 DeepSeek API 的 AI 文案生成工具，支持多语言（中文、英文、粤语）和可定制的语气/长度。
+基于 Streamlit 和 DeepSeek API 的 AI 文案生成工具，支持多语言（中文、英文、粤语）和可定制的语气/长度。
 
 ## Features (功能)
 
@@ -25,7 +24,7 @@ A web-based AI copywriting tool that generates marketing copy for social media p
 
 ## Tech Stack (技术栈)
 
-- **Frontend**: Gradio (Python UI framework)
+- **Frontend**: Streamlit (Python UI framework)
 - **AI Model**: DeepSeek API (`deepseek-chat`) — OpenAI-compatible, cost-effective
 - **Language**: Python 3.12+
 
@@ -33,7 +32,7 @@ A web-based AI copywriting tool that generates marketing copy for social media p
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Gradio    │────▶│  DeepSeek    │────▶│  Generated  │
+│  Streamlit  │────▶│  DeepSeek    │────▶│  Generated  │
 │     UI      │     │    API       │     │    Copy     │
 └─────────────     └──────────────┘     └─────────────┘
        │                    ▲
@@ -75,34 +74,39 @@ Get your API key at: https://platform.deepseek.com/
 
 Run the application:
 ```bash
-python app.py
+streamlit run streamlit_app.py
 ```
 
-The app will start at `http://localhost:7860` (local only, no public tunnel by default).
-应用启动在 `http://localhost:7860`（仅本地访问，默认不开公网链接）。
+The app will start at `http://localhost:8501`.
+应用启动在 `http://localhost:8501`。
 
-## Deploy to HuggingFace Spaces (部署到 HuggingFace Spaces)
+## Deploy to Streamlit Cloud (部署到 Streamlit Cloud)
 
-1. Create a new Space at https://huggingface.co/new-space
-2. Select **Gradio** as the SDK
-3. Upload `app.py` and `requirements.txt`
-4. Add `DEEPSEEK_API_KEY` as a Space secret (Settings → Secrets)
-5. Your app is live!
+1. Fork this repository on GitHub
+2. Go to https://share.streamlit.io/
+3. Click "New app"
+4. Select your forked repository
+5. Set main file to `streamlit_app.py`
+6. Add `DEEPSEEK_API_KEY` as a secret in Streamlit Cloud settings
+7. Your app is live!
 
 ## Project Structure (项目结构)
 
 ```
 01-ai-copywriting-tool/
-├── app.py                  # Main Gradio application (主程序)
+├── streamlit_app.py        # Main Streamlit application (主程序)
+├── app.py                  # Original Gradio app (Gradio 版本，保留)
 ├── requirements.txt        # Python dependencies (依赖)
 ├── .env.example            # Example env config (环境变量示例)
+── .streamlit/
+│   └── config.toml         # Streamlit config (Streamlit 配置)
 └── README.md               # This file (说明文档)
 ```
 
 ## How It Works (工作原理)
 
 1. User inputs topic, selects tone, length, and language (用户输入主题、选择语气、长度和语言)
-2. Gradio UI sends parameters to `generate_copy()` function (Gradio 界面将参数发送给函数)
+2. Streamlit UI sends parameters to `generate_copy()` function (Streamlit 界面将参数发送给函数)
 3. Function constructs a prompt for DeepSeek API (函数构建提示词)
 4. DeepSeek generates marketing copy based on the prompt (DeepSeek 生成文案)
 5. Result is displayed in the UI (结果显示在界面)
@@ -110,16 +114,17 @@ The app will start at `http://localhost:7860` (local only, no public tunnel by d
 ## Customization (自定义)
 
 ### Add More Tones (添加更多语气)
-Edit the `gr.Dropdown` in `app.py`:
+Edit the `tone_map` in `streamlit_app.py`:
 ```python
-gr.Dropdown(
-    choices=["Professional", "Casual", "Humorous", "Inspirational", "Urgent", "YOUR_TONE"],
-    ...
-)
+tone_map = {
+    "Professional / 专业": "professional",
+    "Casual / 休闲": "casual",
+    "YOUR_TONE": "your_value",
+}
 ```
 
 ### Change AI Model (更换 AI 模型)
-Modify the model parameter in `app.py`:
+Modify the model parameter in `streamlit_app.py`:
 ```python
 response = client.chat.completions.create(
     model="deepseek-chat",  # Or other DeepSeek models
@@ -128,7 +133,7 @@ response = client.chat.completions.create(
 ```
 
 ### Add More Languages (添加更多语言)
-Update the `lang_map` dictionary and dropdown choices.
+Update the `lang_map` dictionary in `streamlit_app.py`.
 
 ## Screenshots (截图)
 

@@ -1,2 +1,2 @@
-gradio==6.19.0
+streamlit==1.41.1
 openai==3.3.1
