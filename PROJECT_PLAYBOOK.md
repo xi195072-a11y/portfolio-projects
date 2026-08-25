@@ -25,16 +25,15 @@
 |------|------|------|
 | **写代码** | Trae（AI编程助手） | 直接在项目文件夹里写代码，读 PROJECT_BRIEF.md 和 TRAE_INSTRUCTIONS.md |
 | **日常助手** | 千问办公 | 帮你分析需求、写文档、做研究、整理信息、回答问题 |
-| **知识库** | 待选定 | 整理学习笔记、项目复盘、博主观点、面试准备（见下方说明） |
+| **知识库** | Obsidian | 整理学习笔记、项目复盘、博主观点、面试准备。本地路径：`D:/projects/knowledge-base/`，GitHub 同步：github.com/xi195072-a11y/knowledge-base |
 | **大模型 API** | DeepSeek | 项目代码里调用 AI 能力，不用 OpenAI |
 | **版本管理** | GitHub | 代码托管 + 作品集展示 |
 
-**知识库工具选择（三选一，尽快决定）：**
-- **Notion** — 国际通用，适合香港求职环境，模板丰富，免费版够用
-- **FlowUs** — 中文界面友好，类似 Notion，国内访问快
-- **Obsidian** — 本地存储，数据在自己手里，适合长期积累
-
-> 选定后在这里更新，并把知识库的链接/路径记下来。
+**Obsidian 知识库使用说明：**
+- 本地路径：`D:/projects/knowledge-base/`
+- GitHub 仓库：github.com/xi195072-a11y/knowledge-base
+- 在任何设备上 `git clone` 这个仓库，用 Obsidian 打开就是完整的知识库
+- 每次学到新东西、做完一个项目、看到好文章，都记进去
 
 **工具使用原则（来自熠辉）：**
 1. 不要让 AI 只干零散的活——让它参与从策划到交付的全流程

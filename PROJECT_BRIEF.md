@@ -49,7 +49,7 @@ Build **3 portfolio projects** that demonstrate practical skills for Hong Kong t
 |------|------|---------|
 | **AI Coding** | Trae | Reads PROJECT_BRIEF.md + TRAE_INSTRUCTIONS.md, writes code in project folders |
 | **Daily Assistant** | 千问办公 | Research, documentation, analysis, learning notes |
-| **Knowledge Base** | TBD (Notion / FlowUs / Obsidian) | Learning notes, project retrospectives, blogger insights, interview prep |
+| **Knowledge Base** | Obsidian | Learning notes, project retrospectives, blogger insights, interview prep. Local: `D:/projects/knowledge-base/`, GitHub: `xi195072-a11y/knowledge-base` |
 | **LLM API** | DeepSeek | AI capabilities in project code |
 | **Version Control** | GitHub | Code hosting + portfolio showcase |
 
