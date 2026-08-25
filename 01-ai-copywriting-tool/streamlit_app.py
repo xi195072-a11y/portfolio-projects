@@ -1,11 +1,10 @@
 """
-AI Copywriting Tool - Streamlit Web App
-Generates marketing copy based on topic, tone, and length preferences.
-AI 文案生成器 - 基于 Streamlit 的 Web 应用
-根据主题、语气和长度偏好生成营销文案。
+AI Copywriting Tool — Streamlit Web App (Glassmorphism UI)
+AI 文案生成器 — 基于 Streamlit 的毛玻璃风格 Web 应用
 
 Powered by DeepSeek API (OpenAI-compatible).
 """
+from __future__ import annotations
 
 import os
 from typing import Optional
@@ -20,18 +19,17 @@ from openai import (
     APIConnectionError,
 )
 
-# --- Configuration / 配置 ---
+# ── 配置 / Configuration ──────────────────────────────────────────
 DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 MAX_TOPIC_LENGTH = 200
 
-# --- Lazy client init / 延迟初始化 client ---
 _client: Optional[OpenAI] = None
 
 
 def _get_client() -> OpenAI:
-    """Return a cached DeepSeek OpenAI-compatible client. / 返回缓存的 DeepSeek 客户端。"""
+    """返回缓存的 DeepSeek 客户端。"""
     global _client
     if _client is None:
         api_key = os.environ.get(DEEPSEEK_API_KEY_ENV)
@@ -44,7 +42,7 @@ def _get_client() -> OpenAI:
     return _client
 
 
-# --- UI display string -> prompt value + max output tokens ---
+# ── UI 映射表 / UI Maps ───────────────────────────────────────────
 tone_map = {
     "Professional / 专业": "professional",
     "Casual / 休闲": "casual",
@@ -53,10 +51,11 @@ tone_map = {
     "Urgent / 紧迫": "urgent",
 }
 
+# Token limits optimized for cost savings / 优化 token 上限以节省成本
 length_map = {
-    "Short / 短 (50-100 words)": ("50-100 words", 250),
-    "Medium / 中 (100-200 words)": ("100-200 words", 450),
-    "Long / 长 (200-300 words)": ("200-300 words", 700),
+    "Short / 短 (50-100 words)": ("50-100 words", 180),
+    "Medium / 中 (100-200 words)": ("100-200 words", 350),
+    "Long / 长 (200-300 words)": ("200-300 words", 550),
 }
 
 lang_map = {
@@ -67,19 +66,15 @@ lang_map = {
 
 
 def _build_prompt(topic: str, tone_value: str, length_desc: str, lang_value: str) -> str:
-    """Build a compact prompt to minimize input tokens. / 构建紧凑提示词以最小化输入 token。"""
     return (
         f'Write {tone_value} marketing copy about "{topic}" '
         f'in {lang_value}. Length: {length_desc}. '
-        f'Include a headline and call-to-action.'
+        f'Include headline and CTA.'
     )
 
 
 def generate_copy(topic: str, tone: str, length: str, language: str) -> str:
-    """
-    Generate marketing copy using DeepSeek API.
-    使用 DeepSeek API 生成营销文案。
-    """
+    """生成营销文案。"""
     if not topic or not topic.strip():
         return "Error: Topic is empty. / 错误：主题不能为空。"
 
@@ -88,26 +83,34 @@ def generate_copy(topic: str, tone: str, length: str, language: str) -> str:
         topic = topic[:MAX_TOPIC_LENGTH]
 
     tone_value = tone_map.get(tone, "professional")
-    length_desc, max_tokens = length_map.get(length, ("100-200 words", 450))
+    length_desc, max_tokens = length_map.get(length, ("100-200 words", 350))
     lang_value = lang_map.get(language, "Chinese")
 
     prompt = _build_prompt(topic, tone_value, length_desc, lang_value)
+
+    # Check cache / 检查缓存
+    cache_key = f"{topic}|{tone_value}|{length_desc}|{lang_value}"
+    if "cache" not in st.session_state:
+        st.session_state.cache = {}
+    if cache_key in st.session_state.cache:
+        return st.session_state.cache[cache_key]
 
     try:
         client = _get_client()
         response = client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=[
-                {"role": "system", "content": "You are a marketing copywriter for social media."},
+                {"role": "system", "content": "Marketing copywriter."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
             max_completion_tokens=max_tokens,
         )
-        return response.choices[0].message.content
-
+        result = response.choices[0].message.content
+        st.session_state.cache[cache_key] = result  # Save to cache / 保存到缓存
+        return result
     except AuthenticationError:
-        return f"Error: Invalid DeepSeek API key. / 错误：API key 无效。"
+        return "Error: Invalid DeepSeek API key. / 错误：API key 无效。"
     except RateLimitError:
         return "Error: Rate limit reached. Please wait and retry. / 错误：请求过于频繁，请稍后重试。"
     except APITimeoutError:
@@ -120,18 +123,178 @@ def generate_copy(topic: str, tone: str, length: str, language: str) -> str:
         return "Error: Unexpected error. Please retry. / 错误：未知错误。"
 
 
-# --- Streamlit UI / Streamlit 界面 ---
-st.set_page_config(page_title="AI Copywriting Tool", page_icon="✍️", layout="centered")
+# ═══════════════════════════════════════════════════════════════════
+# Glassmorphism Design System / 毛玻璃设计系统
+# ═══════════════════════════════════════════════════════════════════
+GLASS_CSS = """
+<style>
+:root {
+    --bg: #0f1117;
+    --txt: #f0f2f5;
+    --txt-2: #c0c5d0;
+    --muted: #8b8f9a;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --pink: #ec4899;
+    --cyan: #06b6d4;
+    --r: 16px;
+}
 
-st.title("️ AI Copywriting Tool / AI 文案生成器")
-st.caption(
-    "Generate marketing copy for social media with customizable tone, length, and language. "
-    "Powered by DeepSeek API."
-)
+.stApp {
+    background:
+        radial-gradient(800px 500px at 10% 0%, rgba(99,102,241,0.15) 0%, transparent 55%),
+        radial-gradient(700px 500px at 90% 10%, rgba(236,72,153,0.12) 0%, transparent 50%),
+        radial-gradient(600px 400px at 50% 100%, rgba(6,182,212,0.08) 0%, transparent 50%),
+        #0f1117;
+}
 
-# Sidebar: API key input
+/* 隐藏默认元素 */
+header[data-testid="stHeader"] { background: transparent; }
+#MainMenu, footer { visibility: hidden; }
+.block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 900px; }
+
+/* 字体 */
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+    color: var(--txt);
+    -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { color: var(--txt) !important; letter-spacing: -0.02em; }
+
+/* 毛玻璃卡片核心样式 */
+.glass {
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--r);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+    padding: 1.5rem;
+    margin-bottom: 1.2rem;
+    animation: fadeUp 0.5s ease both;
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* 标题渐变 */
+.gradient-title {
+    background: linear-gradient(90deg, #818cf8, #c084fc, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+/* KPI 小卡片 */
+.kpi-row { display: flex; gap: 0.7rem; margin-bottom: 1rem; }
+.kpi-card {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 0.8rem;
+    text-align: center;
+}
+.kpi-card .label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.kpi-card .value { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-top: 0.3rem; }
+
+/* Streamlit 组件覆盖 */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > div {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 10px !important;
+    color: var(--txt) !important;
+}
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important;
+}
+.stSelectbox > div > div > div[data-baseweb="select"] {
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 10px !important;
+    background: rgba(255,255,255,0.05) !important;
+}
+
+/* 按钮 */
+.stButton > button {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    color: white !important;
+    font-weight: 600 !important;
+    padding: 0.6rem 2rem !important;
+    box-shadow: 0 4px 16px rgba(99,102,241,0.3) !important;
+    transition: all 0.2s !important;
+}
+.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 24px rgba(99,102,241,0.4) !important;
+}
+
+/* 侧边栏 */
+section[data-testid="stSidebar"] {
+    background: rgba(15,17,23,0.7) !important;
+    backdrop-filter: blur(20px) !important;
+    border-right: 1px solid rgba(255,255,255,0.06) !important;
+}
+section[data-testid="stSidebar"] .stMarkdown { color: var(--txt-2); }
+
+/* 输出区 */
+.output-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 1.2rem;
+    margin-top: 1rem;
+    min-height: 120px;
+}
+
+/* 分割线 */
+hr {
+    border: none !important;
+    border-top: 1px solid rgba(255,255,255,0.08) !important;
+    margin: 1.5rem 0 !important;
+}
+</style>
+"""
+
+
+def inject_glass_css():
+    """注入毛玻璃 CSS。"""
+    st.markdown(GLASS_CSS, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Streamlit UI
+# ═══════════════════════════════════════════════════════════════════
+st.set_page_config(page_title="AI Copywriting Tool / AI 文案生成器", page_icon="✍️", layout="centered")
+inject_glass_css()
+
+# ── 标题区 ────────────────────────────────────────────────────────
+st.markdown("""
+<div class="glass" style="text-align:center; padding:2rem 1.5rem;">
+    <div style="font-size:2.5rem; margin-bottom:0.5rem;">✍️</div>
+    <div class="gradient-title">AI Copywriting Tool</div>
+    <div style="font-size:0.95rem; color:var(--txt-2); margin-top:0.3rem;">
+        AI 文案生成器 · Powered by DeepSeek API
+    </div>
+    <div style="font-size:0.78rem; color:var(--muted); margin-top:0.5rem;">
+        自定义语气 · 长度 · 语言 / Customizable Tone · Length · Language
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── 侧边栏：API Key ──────────────────────────────────────────────
 with st.sidebar:
-    st.header("⚙️ Settings")
+    st.markdown("### ⚙️ Settings / 设置")
     api_key = st.text_input(
         "DeepSeek API Key",
         value=os.environ.get(DEEPSEEK_API_KEY_ENV, ""),
@@ -140,58 +303,74 @@ with st.sidebar:
     )
     if api_key:
         os.environ[DEEPSEEK_API_KEY_ENV] = api_key
+        st.success("Key set / 已设置", icon="✅")
+    else:
+        st.warning("Please enter API key / 请输入 API Key", icon="⚠️")
 
-# Main form
-with st.form("copy_form", clear_on_submit=False):
-    topic = st.text_area(
-        "Topic / Product (主题/产品)",
-        placeholder="例如：New smartphone launch / 新手机发布会；Coffee shop opening / 咖啡店开业",
-        height=80,
-    )
-    col1, col2 = st.columns(2)
-    with col1:
-        tone = st.selectbox(
-            "Tone (语气)",
-            options=list(tone_map.keys()),
-            index=0,
-        )
-        language = st.selectbox(
-            "Language (语言)",
-            options=list(lang_map.keys()),
-            index=0,
-        )
-    with col2:
-        length = st.selectbox(
-            "Length (长度)",
-            options=list(length_map.keys()),
-            index=1,
-        )
+    st.markdown("---")
+    st.markdown("#### 💡 Examples / 示例")
+    examples = [
+        ("📱 New iPhone launch", "Professional", "Medium", "English"),
+        ("☕ Coffee shop opening", "Casual", "Short", "中文"),
+        ("💪 Fitness app promotion", "Inspirational", "Long", "粤语"),
+    ]
+    for ex in examples:
+        st.markdown(f"`{ex[0]}` · {ex[1]} · {ex[2]} · {ex[3]}")
 
-    submitted = st.form_submit_button("🚀 Generate Copy / 生成文案", use_container_width=True)
+# ── 主表单 ────────────────────────────────────────────────────────
+st.markdown("""
+<div class="glass">
+""", unsafe_allow_html=True)
+
+st.markdown("#### 📝 Create Copy / 创建文案")
+
+topic = st.text_area(
+    "Topic / Product (主题 / 产品)",
+    placeholder="例如：New smartphone launch / 新手机发布会",
+    height=70,
+    help="Enter the product or topic you want copy for. / 输入产品或主题",
+)
+
+col1, col2 = st.columns(2)
+with col1:
+    tone = st.selectbox("Tone (语气)", options=list(tone_map.keys()), index=0)
+    language = st.selectbox("Language (语言)", options=list(lang_map.keys()), index=0)
+with col2:
+    length = st.selectbox("Length (长度)", options=list(length_map.keys()), index=1)
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ── 生成按钮 ──────────────────────────────────────────────────────
+col_btn, col_info = st.columns([1, 3])
+with col_btn:
+    submitted = st.button("🚀 Generate / 生成文案", use_container_width=True)
 
 if submitted:
     if not os.environ.get(DEEPSEEK_API_KEY_ENV):
         st.error("Please enter your DeepSeek API Key in the sidebar. / 请在侧边栏输入 API Key。")
+    elif not topic.strip():
+        st.error("Please enter a topic. / 请输入主题。")
     else:
         with st.spinner("Generating... / 生成中..."):
             result = generate_copy(topic, tone, length, language)
-        st.markdown("### Generated Copy / 生成的文案")
-        st.text_area("", value=result, height=200, label_visibility="collapsed")
 
-# Examples section
-st.markdown("---")
-st.markdown("### 💡 Examples / 示例")
-examples = [
-    ("New iPhone launch", "Professional / 专业", "Medium / 中 (100-200 words)", "English / 英文"),
-    ("Coffee shop grand opening", "Casual / 休闲", "Short / 短 (50-100 words)", "中文 / Chinese"),
-    ("Fitness app promotion", "Inspirational / 励志", "Long / 长 (200-300 words)", "粤语 / Cantonese"),
-]
-for ex_topic, ex_tone, ex_length, ex_lang in examples:
-    st.markdown(f"- **{ex_topic}** | {ex_tone} | {ex_length} | {ex_lang}")
+        st.markdown("---")
+        st.markdown("### 📋 Generated Copy / 生成的文案")
+        st.markdown(f"""
+        <div class="glass" style="min-height:150px;">
+            <div style="white-space:pre-wrap; line-height:1.7; color:var(--txt);">
+{result}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# Footer
-st.markdown("---")
-st.markdown(
-    "Built by [Jiaxi Zhong](https://github.com/xi195072-a11y) | "
-    "Powered by DeepSeek API"
-)
+        # Copy button / 复制按钮
+        st.code(result, language="text")
+        st.caption(" Tip: Click the copy icon above to copy. / 点击上方复制图标即可复制。")
+
+# ── 页脚 ──────────────────────────────────────────────────────────
+st.markdown("""
+<div style="text-align:center; padding:1rem 0; color:var(--muted); font-size:0.75rem;">
+    Built by 小希 · Powered by DeepSeek API · Streamlit + Glassmorphism UI
+</div>
+""", unsafe_allow_html=True)
