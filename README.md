@@ -9,15 +9,17 @@
 
 | # | 项目 | 目录 | 状态 | 技术栈 |
 |---|------|------|------|--------|
-| 01 | **AI 文案生成器** / AI Copywriting Tool | [`01-ai-copywriting-tool/`](./01-ai-copywriting-tool/) | ✅ 已完成 | Python · Gradio · DeepSeek API |
-| 02 | **社媒数据分析器** / Social Media Analyzer | [`02-social-media-analyzer/`](./02-social-media-analyzer/) | 🔴 待开发 | Python · Pandas · Gradio |
-| 03 | **自动化工作流引擎** / Automation Workflow Engine | [`03-automation-workflow/`](./03-automation-workflow/) | 🔴 待开发 | Python · Gradio · API 集成 |
+| 01 | **AI 文案生成器** / AI Copywriting Tool | [`01-ai-copywriting-tool/`](./01-ai-copywriting-tool/) |  **已上线** [Live Demo](https://portfolio-projects-hhqpm6fcbqyatir4qxjxcc.streamlit.app/) | Python · Streamlit · DeepSeek API |
+| 02 | **社媒数据分析器** / Social Media Analyzer | [`02-social-media-analyzer/`](./02-social-media-analyzer/) | 🟡 开发中 | Python · Pandas · Streamlit |
+| 03 | **自动化工作流引擎** / Automation Workflow Engine | [`03-automation-workflow/`](./03-automation-workflow/) | 🔴 待开发 | Python · DeepSeek API |
 
 ---
 
 ## 项目详情 / Project Details
 
 ### 01 · AI 文案生成器 / AI Copywriting Tool
+
+**Live Demo:** [https://portfolio-projects-hhqpm6fcbqyatir4qxjxcc.streamlit.app/](https://portfolio-projects-hhqpm6fcbqyatir4qxjxcc.streamlit.app/)
 
 一个基于 DeepSeek API 的社媒营销文案生成工具，支持中/英/粤三语，可自定义语气、长度和语言。
 
@@ -41,9 +43,9 @@ A web-based AI copywriting tool that generates marketing copy for social media, 
 ## 技术栈 / Tech Stack
 
 - **语言**: Python 3.12+
-- **UI 框架**: Gradio
+- **UI 框架**: Streamlit
 - **AI API**: DeepSeek API (`deepseek-chat`)
-- **部署**: HuggingFace Spaces
+- **部署**: Streamlit Cloud
 
 ---
 
@@ -66,7 +68,7 @@ $env:DEEPSEEK_API_KEY = "your-api-key-here"
 # export DEEPSEEK_API_KEY="your-api-key-here"
 
 # 运行
-python app.py
+streamlit run streamlit_app.py
 ```
 
 ---
