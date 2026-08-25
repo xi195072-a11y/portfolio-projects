@@ -43,6 +43,18 @@ Build **3 portfolio projects** that demonstrate practical skills for Hong Kong t
 | **Dependencies** | Pin versions in `requirements.txt`. Prefer lightweight packages. |
 | **Git** | One repo, multiple project folders. Clean commit messages. |
 
+### Tool Chain（工具链）
+
+| Role | Tool | Purpose |
+|------|------|---------|
+| **AI Coding** | Trae | Reads PROJECT_BRIEF.md + TRAE_INSTRUCTIONS.md, writes code in project folders |
+| **Daily Assistant** | 千问办公 | Research, documentation, analysis, learning notes |
+| **Knowledge Base** | TBD (Notion / FlowUs / Obsidian) | Learning notes, project retrospectives, blogger insights, interview prep |
+| **LLM API** | DeepSeek | AI capabilities in project code |
+| **Version Control** | GitHub | Code hosting + portfolio showcase |
+
+> Tool chain philosophy (from 熠辉): Keep it simple. One tool for coding, one for knowledge, one for ideas. No bloat.
+
 ---
 
 ## 4. Project Specifications
