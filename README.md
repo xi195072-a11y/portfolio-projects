@@ -71,6 +71,16 @@ python app.py
 
 ---
 
+## 开发文档 / Documentation
+
+| 文件 | 用途 |
+|------|------|
+| `PROJECT_BRIEF.md` | 技术规范与代码标准（给 AI 和开发者看） |
+| `PROJECT_PLAYBOOK.md` | 新项目启动章程（每次开新项目时按这个流程走） |
+| `TRAE_INSTRUCTIONS.md` | AI 编程助手快速参考（Trae/Cursor 等工具读取） |
+
+---
+
 ## 关于 / About
 
 小希
