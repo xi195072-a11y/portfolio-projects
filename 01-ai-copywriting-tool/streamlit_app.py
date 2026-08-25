@@ -130,13 +130,13 @@ GLASS_CSS = """
 <style>
 :root {
     --bg: #0f1117;
-    --txt: #f0f2f5;
-    --txt-2: #c0c5d0;
-    --muted: #8b8f9a;
-    --accent: #6366f1;
-    --accent-2: #8b5cf6;
-    --pink: #ec4899;
-    --cyan: #06b6d4;
+    --txt: #ffffff;
+    --txt-2: #e4e8f0;
+    --muted: #b5bcc8;
+    --accent: #818cf8;
+    --accent-2: #c084fc;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
     --r: 16px;
 }
 
@@ -203,25 +203,50 @@ h1, h2, h3 { color: var(--txt) !important; letter-spacing: -0.02em; }
 .kpi-card .label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .kpi-card .value { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-top: 0.3rem; }
 
-/* Streamlit 组件覆盖 */
+/* Streamlit 组件覆盖 - 提高可读性 */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stSelectbox > div > div > div {
-    background: rgba(255,255,255,0.05) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
+    background: rgba(255,255,255,0.07) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
     border-radius: 10px !important;
-    color: var(--txt) !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+.stTextInput label, .stTextArea label, .stSelectbox label {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+.stTextInput [data-testid="stTextInput-label"],
+.stTextArea [data-testid="stTextArea-label"] {
+    color: #ffffff !important;
+}
+.stTextInput > div > div > input::placeholder,
+.stTextArea > div > div > textarea::placeholder {
+    color: #8b8f9a !important;
 }
 .stTextInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important;
+    box-shadow: 0 0 0 3px rgba(129,140,248,0.2) !important;
 }
 .stSelectbox > div > div > div[data-baseweb="select"] {
-    border: 1px solid rgba(255,255,255,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
     border-radius: 10px !important;
-    background: rgba(255,255,255,0.05) !important;
+    background: rgba(255,255,255,0.07) !important;
+    color: #ffffff !important;
 }
+.stSelectbox [data-baseweb="select"] [aria-selected="true"] {
+    color: #ffffff !important;
+}
+.stSelectbox ul {
+    background: #1a1d26 !important;
+    color: #ffffff !important;
+}
+.stMarkdown { color: #ffffff !important; }
+.stMarkdown p, .stMarkdown li, .stMarkdown span { color: #e8eaed !important; }
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 { color: #ffffff !important; }
+.stMarkdown code { background: rgba(255,255,255,0.1) !important; color: #f472b6 !important; }
 
 /* 按钮 */
 .stButton > button {
@@ -241,11 +266,25 @@ h1, h2, h3 { color: var(--txt) !important; letter-spacing: -0.02em; }
 
 /* 侧边栏 */
 section[data-testid="stSidebar"] {
-    background: rgba(15,17,23,0.7) !important;
+    background: rgba(15,17,23,0.85) !important;
     backdrop-filter: blur(20px) !important;
-    border-right: 1px solid rgba(255,255,255,0.06) !important;
+    border-right: 1px solid rgba(255,255,255,0.08) !important;
 }
-section[data-testid="stSidebar"] .stMarkdown { color: var(--txt-2); }
+section[data-testid="stSidebar"] .stMarkdown { color: #e8eaed !important; }
+section[data-testid="stSidebar"] p { color: #d8dde6 !important; }
+section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] h4 { color: #ffffff !important; }
+section[data-testid="stSidebar"] label { color: #ffffff !important; }
+section[data-testid="stSidebar"] .stForm { color: #ffffff !important; }
+
+/* st.success / st.warning 增强对比度 */
+div[data-testid="stAlert"] {
+    border-radius: 10px !important;
+}
+div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p {
+    color: #ffffff !important;
+    font-weight: 500 !important;
+}
 
 /* 输出区 */
 .output-box {
@@ -292,20 +331,31 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── 侧边栏：API Key ──────────────────────────────────────────────
+# ── 侧边栏：API Key（不在界面上预显示） ─────────────────────────
 with st.sidebar:
     st.markdown("### ⚙️ Settings / 设置")
+
+    # 从环境变量读取
+    saved_key = os.environ.get(DEEPSEEK_API_KEY_ENV, "")
+
+    # st.text_input 在 rerun 时保留值，直接用
     api_key = st.text_input(
         "DeepSeek API Key",
-        value=os.environ.get(DEEPSEEK_API_KEY_ENV, ""),
+        value="",
         type="password",
-        help="Get your key at https://platform.deepseek.com/",
+        placeholder="sk-... 粘贴你的 API Key",
+        help="Key 仅存于本次会话中，不会硬编码 / Stored in session only",
     )
-    if api_key:
-        os.environ[DEEPSEEK_API_KEY_ENV] = api_key
-        st.success("Key set / 已设置", icon="✅")
+
+    # 只要输入框有值就设置到环境变量
+    current_key = api_key or st.session_state.get("user_api_key", "") or saved_key
+    if current_key:
+        os.environ[DEEPSEEK_API_KEY_ENV] = current_key
+        if api_key:
+            st.session_state["user_api_key"] = api_key
+        st.success("✅ Key 已就绪 / Key ready", icon="✅")
     else:
-        st.warning("Please enter API key / 请输入 API Key", icon="⚠️")
+        st.warning("请输入 API Key / Enter API Key", icon="⚠️")
 
     st.markdown("---")
     st.markdown("#### 💡 Examples / 示例")
@@ -324,27 +374,27 @@ st.markdown("""
 
 st.markdown("#### 📝 Create Copy / 创建文案")
 
-topic = st.text_area(
-    "Topic / Product (主题 / 产品)",
-    placeholder="例如：New smartphone launch / 新手机发布会",
-    height=70,
-    help="Enter the product or topic you want copy for. / 输入产品或主题",
-)
+# 用 form 包裹，确保所有输入在提交时一起传递
+with st.form("copy_form"):
+    topic = st.text_area(
+        "Topic / Product (主题 / 产品)",
+        placeholder="例如：New smartphone launch / 新手机发布会",
+        height=70,
+        help="Enter the product or topic you want copy for. / 输入产品或主题",
+    )
 
-col1, col2 = st.columns(2)
-with col1:
-    tone = st.selectbox("Tone (语气)", options=list(tone_map.keys()), index=0)
-    language = st.selectbox("Language (语言)", options=list(lang_map.keys()), index=0)
-with col2:
-    length = st.selectbox("Length (长度)", options=list(length_map.keys()), index=1)
+    col1, col2 = st.columns(2)
+    with col1:
+        tone = st.selectbox("Tone (语气)", options=list(tone_map.keys()), index=0)
+        language = st.selectbox("Language (语言)", options=list(lang_map.keys()), index=0)
+    with col2:
+        length = st.selectbox("Length (长度)", options=list(length_map.keys()), index=1)
 
-st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# ── 生成按钮 ──────────────────────────────────────────────────────
-col_btn, col_info = st.columns([1, 3])
-with col_btn:
-    submitted = st.button("🚀 Generate / 生成文案", use_container_width=True)
+    submitted = st.form_submit_button("🚀 Generate / 生成文案", use_container_width=True)
 
+# form 外部处理结果
 if submitted:
     if not os.environ.get(DEEPSEEK_API_KEY_ENV):
         st.error("Please enter your DeepSeek API Key in the sidebar. / 请在侧边栏输入 API Key。")

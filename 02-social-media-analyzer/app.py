@@ -1,683 +1,522 @@
-"""
-Social Media Analyzer / 社媒数据分析器
-A web-based social media analytics dashboard for HK content creators and marketers.
-Supports CSV data upload, multi-dimensional analysis, and visual report generation.
+"""B站 UP 主数据分析器 - Single-page dashboard.
+Bilibili Creator Data Analyzer — 单页面仪表板。
 
-面向香港内容创作者和营销人员的社媒数据分析仪表板。
-支持 CSV 数据上传、多维度分析和可视化报告生成。
+数据来源：
+- 默认：预取 JSON 文件（data/ 目录，稳定可靠）
+- 可选：实时 B站 API（dm_img_* + WBI 签名）
+
+Features:
+- 真实 B站数据（3 位知名 UP 主）
+- KPI 卡片 + 4 种 Plotly 图表 + 智能洞察 + CSV 导出
+- 中英双语界面
 """
+from __future__ import annotations
+
+import sys
+import os
+import json
+
+# 本地依赖路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".packages"))
+
 import gradio as gr
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import tempfile
-import os
+from plotly.subplots import make_subplots
 
-# --- Configuration ---
-DEFAULT_DAYS = 30
-SUPPORTED_PLATFORMS = ["Instagram", "Facebook", "X", "小红书", "抖音", "Bilibili"]
-METRIC_COLUMNS = ["likes", "shares", "comments", "views"]
+# 数据目录
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
-# --- Sample Data Generation ---
-def generate_sample_data(days: int = DEFAULT_DAYS) -> pd.DataFrame:
-    """Generate realistic sample social media data for HK market.
-    生成面向香港市场的真实社媒示例数据。
+# 预设 UP 主（有预取数据的）
+PRESET_UPS: list[tuple[str, int]] = [
+    ("影视飓风 / Stormstorm", 946974),
+    ("老番茄 / OldTomato", 546195),
+    ("半佛仙人 / Bafo", 37663924),
+]
 
-    Data includes: date, platform, post_id, content, likes, shares, comments,
-    views, hashtags, post_type, and hour posted.
-    """
-    import random
-    random.seed(42)
-
-    platforms = ["Instagram", "Facebook", "X", "小红书", "抖音"]
-    post_types = ["image", "video", "carousel", "story", "reel"]
-    hk_hashtags = [
-        "#香港美食", "#HKFoodie", "#香港打卡", "#HongKong", "#HK生活",
-        "#香港探店", "#HKTravel", "#香港摄影", "#HKFashion", "#香港健身",
-        "#HKTech", "#香港创业", "#HKArt", "#香港音乐", "#HKSports"
-    ]
-
-    records = []
-    for day_offset in range(days):
-        date = datetime.now() - timedelta(days=day_offset)
-        # 3-8 posts per day
-        num_posts = random.randint(3, 8)
-        for _ in range(num_posts):
-            platform = random.choice(platforms)
-            post_type = random.choice(post_types)
-            hour = random.randint(7, 23)  # 7am to 11pm
-
-            # Platform-typical engagement rates
-            base_likes = {
-                "Instagram": random.randint(50, 500),
-                "Facebook": random.randint(30, 300),
-                "X": random.randint(20, 200),
-                "小红书": random.randint(100, 800),
-                "抖音": random.randint(200, 1500),
-            }
-            likes = base_likes.get(platform, 100)
-            shares = max(1, int(likes * random.uniform(0.02, 0.15)))
-            comments = max(1, int(likes * random.uniform(0.03, 0.20)))
-            views = likes * random.randint(3, 20)
-
-            # Peak hours get more engagement
-            if 12 <= hour <= 14 or 19 <= hour <= 22:
-                likes = int(likes * 1.5)
-                shares = int(shares * 1.3)
-                comments = int(comments * 1.4)
-
-            selected_hashtags = random.sample(hk_hashtags, random.randint(1, 4))
-
-            records.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "hour": hour,
-                "platform": platform,
-                "post_id": f"{platform[:2].lower()}_{date.strftime('%Y%m%d')}_{len(records):04d}",
-                "post_type": post_type,
-                "content": f"Sample {platform} post for HK market #{random.randint(100,999)}",
-                "likes": likes,
-                "shares": shares,
-                "comments": comments,
-                "views": views,
-                "hashtags": " ".join(selected_hashtags),
-            })
-
-    df = pd.DataFrame(records)
-    df["date"] = pd.to_datetime(df["date"])
-    df["total_engagement"] = df["likes"] + df["shares"] + df["comments"]
-    return df
+# B站 品牌配色
+COLOR_PRIMARY = "#00AEEC"
+COLOR_SECONDARY = "#FB7299"
 
 
-# --- Data Processing ---
-def process_uploaded_file(file) -> pd.DataFrame:
-    """Read and validate uploaded CSV file.
-    读取并验证上传的 CSV 文件。
+def _fmt_num(n: int) -> str:
+    """格式化数字：1.2M / 3.4K。"""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
 
-    Expected columns: date, platform, likes, shares, comments, views (optional).
-    """
-    if file is None:
-        return None
 
-    try:
-        df = pd.read_csv(file.name)
-    except Exception as e:
-        raise ValueError(f"无法读取文件 / Cannot read file: {str(e)}")
+def _load_from_json(mid: int) -> tuple[dict | None, pd.DataFrame]:
+    """从 JSON 文件加载数据。"""
+    filepath = os.path.join(DATA_DIR, f"up_{mid}.json")
+    if not os.path.exists(filepath):
+        return None, pd.DataFrame()
 
-    required_cols = {"date", "platform"}
-    missing = required_cols - set(df.columns)
-    if missing:
-        raise ValueError(
-            f"缺少必要列 / Missing required columns: {', '.join(missing)}. "
-            f"需要列: date, platform, likes, shares, comments, views"
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    info = data["info"]
+    videos = data["videos"]
+
+    # 转换为 DataFrame
+    df = pd.DataFrame(videos)
+
+    # 转换日期列
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    # 转换数值列
+    for col in ["views", "likes", "favorites", "comments", "shares", "engagement", "engagement_rate"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float if col == "engagement_rate" else int)
+        else:
+            if col == "engagement_rate":
+                df[col] = 0.0
+            elif col == "engagement":
+                df[col] = 0
+            else:
+                df[col] = 0
+
+    if "engagement" not in df.columns:
+        df["engagement"] = df["likes"] + df["favorites"] + df["comments"] + df["shares"]
+    if "engagement_rate" not in df.columns:
+        df["engagement_rate"] = df.apply(
+            lambda r: round((r["engagement"] / r["views"] * 100), 2) if r["views"] > 0 else 0.0,
+            axis=1,
         )
+    if "platform" not in df.columns:
+        df["platform"] = "Bilibili"
 
-    # Fill missing metric columns with 0
-    for col in METRIC_COLUMNS:
-        if col not in df.columns:
-            df[col] = 0
-
-    # Parse date column
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna(subset=["date", "platform"])
-
-    # Ensure numeric
-    for col in METRIC_COLUMNS:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
-
-    # Add derived columns
-    df["total_engagement"] = df["likes"] + df["shares"] + df["comments"]
-    if "hour" not in df.columns:
-        df["hour"] = df["date"].dt.hour
-    else:
-        df["hour"] = pd.to_numeric(df["hour"], errors="coerce").fillna(12).astype(int)
-
-    return df
+    df = df.sort_values("date", ascending=False, na_position="last").reset_index(drop=True)
+    return info, df
 
 
-# --- Analysis Functions ---
-def compute_overview(df: pd.DataFrame) -> dict:
-    """Compute high-level engagement overview metrics.
-    计算高层次互动概览指标。
-    """
+def _fetch_live(mid: int, max_videos: int = 30) -> tuple[dict | None, pd.DataFrame]:
+    """从 B站 API 实时获取数据。"""
+    try:
+        from bilibili_api import quick_fetch
+        info, df = quick_fetch(mid, max_videos=max_videos)
+        if df.empty:
+            return None, pd.DataFrame()
+
+        info_dict = {
+            "mid": info.mid, "name": info.name,
+            "face": info.face, "followers": info.followers,
+            "video_count": info.video_count or len(df),
+        }
+        return info_dict, df
+    except Exception as e:
+        raise RuntimeError(f"实时 API 获取失败 / Live API failed: {e}")
+
+
+def _build_kpi_cards(info: dict, df: pd.DataFrame) -> list[dict]:
+    """构建 KPI 卡片。"""
     if df.empty:
-        return {}
+        return []
 
-    total = {
-        "total_posts": len(df),
-        "total_likes": int(df["likes"].sum()),
-        "total_shares": int(df["shares"].sum()),
-        "total_comments": int(df["comments"].sum()),
-        "total_views": int(df["views"].sum()) if "views" in df.columns else 0,
-        "total_engagement": int(df["total_engagement"].sum()),
-        "avg_engagement_per_post": round(df["total_engagement"].mean(), 1),
-        "engagement_rate": round(
-            df["total_engagement"].sum() / max(df["views"].sum(), 1) * 100, 2
-        ),
-        "date_range": f"{df['date'].min().strftime('%Y-%m-%d')} ~ {df['date'].max().strftime('%Y-%m-%d')}",
-        "platforms": df["platform"].nunique(),
-    }
-    return total
+    total_views = int(df["views"].sum())
+    total_comments = int(df["comments"].sum())
+    avg_views = int(df["views"].mean())
+    max_video_views = int(df["views"].max())
+    engagement_rate = round(df["engagement_rate"].mean(), 2)
+    recent_30 = df[df["date"] >= pd.Timestamp.now() - pd.Timedelta(days=30)]
+    recent_views = int(recent_30["views"].sum()) if len(recent_30) > 0 else 0
 
+    total_videos = info.get("video_count", len(df))
+    followers = info.get("followers", 0)
 
-def compute_platform_comparison(df: pd.DataFrame) -> pd.DataFrame:
-    """Compare engagement metrics across platforms.
-    跨平台对比互动指标。
-    """
-    if df.empty:
-        return pd.DataFrame()
-
-    platform_stats = df.groupby("platform").agg({
-        "likes": ["sum", "mean"],
-        "shares": ["sum", "mean"],
-        "comments": ["sum", "mean"],
-        "views": ["sum", "mean"],
-        "total_engagement": ["sum", "mean"],
-    }).reset_index()
-
-    # Flatten multi-level columns
-    platform_stats.columns = [
-        "_".join(col).strip("_") for col in platform_stats.columns.to_flat_index()
+    return [
+        {"label": "总播放量 / Total Views", "value": _fmt_num(total_views), "sub": f"{total_views:,}"},
+        {"label": "粉丝数 / Followers", "value": _fmt_num(followers), "sub": f"{followers:,}"},
+        {"label": "视频总数 / Total Videos", "value": str(total_videos), "sub": f"近期抓取 {len(df)} 条"},
+        {"label": "总评论数 / Total Comments", "value": _fmt_num(total_comments), "sub": f"{total_comments:,}"},
+        {"label": "平均播放 / Avg Views", "value": _fmt_num(avg_views), "sub": f"{avg_views:,}"},
+        {"label": "最高单作 / Top Video", "value": _fmt_num(max_video_views), "sub": f"{max_video_views:,}"},
+        {"label": "互动率 / Engagement Rate", "value": f"{engagement_rate}%", "sub": "平均互动率"},
+        {"label": "近30天播放 / 30d Views", "value": _fmt_num(recent_views), "sub": f"{recent_views:,}"},
     ]
 
-    platform_stats["engagement_rate"] = (
-        platform_stats["total_engagement_sum"] /
-        platform_stats["views_sum"].clip(lower=1) * 100
-    ).round(2)
 
-    return platform_stats
+def _plot_trend(df: pd.DataFrame) -> go.Figure:
+    """趋势图。"""
+    daily = df.groupby(df["date"].dt.date)["views"].sum().sort_index()
+    if len(daily) == 0:
+        return go.Figure()
+    ma7 = daily.rolling(7, min_periods=1).mean()
 
-
-def compute_top_posts(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
-    """Get top N posts by engagement.
-    按互动量获取前 N 条帖子。
-    """
-    if df.empty:
-        return pd.DataFrame()
-
-    top = df.nlargest(top_n, "total_engagement")
-    cols = ["date", "platform", "post_type", "content", "likes", "shares",
-            "comments", "views", "total_engagement"]
-    available_cols = [c for c in cols if c in df.columns]
-    return top[available_cols].reset_index(drop=True)
-
-
-def compute_optimal_time(df: pd.DataFrame) -> pd.DataFrame:
-    """Analyze engagement by posting hour to find optimal times.
-    按发帖时间分析互动，找出最佳发帖时段。
-    """
-    if df.empty:
-        return pd.DataFrame()
-
-    hourly = df.groupby("hour").agg({
-        "total_engagement": ["sum", "mean", "count"],
-        "likes": "sum",
-    }).reset_index()
-
-    hourly.columns = ["hour", "engagement_sum", "engagement_avg", "post_count", "likes_sum"]
-    hourly["engagement_rate"] = (
-        hourly["engagement_sum"] / hourly["engagement_sum"].max() * 100
-    ).round(1)
-
-    return hourly
-
-
-def compute_word_frequency(df: pd.DataFrame, top_n: int = 20) -> pd.DataFrame:
-    """Analyze hashtag/content word frequency.
-    分析标签/内容词频。
-    """
-    if df.empty:
-        return pd.DataFrame()
-
-    # Extract hashtags
-    if "hashtags" in df.columns:
-        all_tags = []
-        for tags in df["hashtags"].dropna():
-            all_tags.extend(str(tags).split())
-
-        if all_tags:
-            from collections import Counter
-            counter = Counter(all_tags)
-            freq = counter.most_common(top_n)
-            return pd.DataFrame(freq, columns=["hashtag", "count"])
-
-    return pd.DataFrame(columns=["hashtag", "count"])
-
-
-# --- Visualization ---
-def create_trend_chart(df: pd.DataFrame) -> go.Figure:
-    """Create engagement trend line chart.
-    创建互动趋势折线图。
-    """
-    if df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="暂无数据 / No data", showarrow=False, font_size=20)
-        return fig
-
-    daily = df.groupby("date")["total_engagement"].sum().reset_index()
-    daily = daily.sort_values("date")
-
-    fig = px.line(
-        daily, x="date", y="total_engagement",
-        title="互动趋势 / Engagement Trend Over Time",
-        labels={"date": "日期 / Date", "total_engagement": "总互动 / Total Engagement"},
-    )
-    fig.update_traces(line=dict(width=2), marker=dict(size=6))
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=daily.index.astype(str), y=daily.values,
+        name="日播放量 / Daily Views",
+        marker_color=COLOR_PRIMARY, opacity=0.6,
+        hovertemplate="日期: %{x}<br>播放: %{y:,}<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=daily.index.astype(str), y=ma7.values,
+        mode="lines", name="7日均线 / 7-day MA",
+        line=dict(color=COLOR_SECONDARY, width=3),
+        hovertemplate="日期: %{x}<br>均线: %{y:,.0f}<extra></extra>",
+    ))
     fig.update_layout(
-        xaxis_title="日期 / Date",
-        yaxis_title="总互动 / Total Engagement",
+        title=dict(text="播放量趋势 / View Trend", font=dict(size=16)),
+        height=380, margin=dict(l=50, r=30, t=60, b=40),
+        template="plotly_white",
+        xaxis_title="日期 / Date", yaxis_title="播放量 / Views",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
     )
     return fig
 
 
-def create_platform_bar_chart(df: pd.DataFrame) -> go.Figure:
-    """Create grouped bar chart comparing platforms.
-    创建跨平台对比柱状图。
-    """
-    if df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="暂无数据 / No data", showarrow=False, font_size=20)
-        return fig
-
-    platform_stats = compute_platform_comparison(df)
-    if platform_stats.empty:
+def _plot_top_videos(df: pd.DataFrame) -> go.Figure:
+    """Top 10 视频。"""
+    top10 = df.nlargest(10, "views").sort_values("views")
+    if top10.empty:
         return go.Figure()
+    titles = [t[:30] + "..." if len(t) > 30 else t for t in top10["title"]]
 
     fig = go.Figure()
-    metrics = [
-        ("likes_sum", "点赞 / Likes", "#636EFA"),
-        ("shares_sum", "转发 / Shares", "#EF553B"),
-        ("comments_sum", "评论 / Comments", "#00CC96"),
-    ]
-
-    for col, name, color in metrics:
-        if col in platform_stats.columns:
-            fig.add_trace(go.Bar(
-                name=name,
-                x=platform_stats["platform"],
-                y=platform_stats[col],
-                marker_color=color,
-            ))
-
-    fig.update_layout(
-        title="平台互动对比 / Platform Engagement Comparison",
-        barmode="group",
-        xaxis_title="平台 / Platform",
-        yaxis_title="数量 / Count",
-        hovermode="closest",
-    )
-    return fig
-
-
-def create_optimal_time_heatmap(df: pd.DataFrame) -> go.Figure:
-    """Create heatmap of engagement by hour and platform.
-    创建按时段和平台的互动热力图。
-    """
-    if df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="暂无数据 / No data", showarrow=False, font_size=20)
-        return fig
-
-    # Create pivot: hour x platform
-    pivot = df.pivot_table(
-        values="total_engagement",
-        index="hour",
-        columns="platform",
-        aggfunc="mean",
-        fill_value=0,
-    )
-
-    fig = go.Figure(data=go.Heatmap(
-        z=pivot.values,
-        x=pivot.columns.tolist(),
-        y=[f"{h:02d}:00" for h in pivot.index],
-        colorscale="YlOrRd",
-        colorbar=dict(title="平均互动 / Avg Engagement"),
+    fig.add_trace(go.Bar(
+        x=top10["views"].values, y=titles, orientation="h",
+        marker_color=COLOR_PRIMARY,
+        hovertemplate="<b>%{y}</b><br>播放: %{x:,}<extra></extra>",
     ))
-
     fig.update_layout(
-        title="最佳发帖时间 / Optimal Posting Time (Heatmap)",
-        xaxis_title="平台 / Platform",
-        yaxis_title="时段 / Hour",
+        title=dict(text="Top 10 视频 / Top Videos", font=dict(size=16)),
+        height=400, margin=dict(l=150, r=30, t=60, b=40),
+        template="plotly_white",
+        xaxis_title="播放量 / Views",
     )
     return fig
 
 
-def create_top_posts_chart(df: pd.DataFrame, top_n: int = 10) -> go.Figure:
-    """Create horizontal bar chart of top posts.
-    创建热门帖子横向柱状图。
-    """
-    if df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="暂无数据 / No data", showarrow=False, font_size=20)
-        return fig
-
-    top = compute_top_posts(df, top_n)
-    if top.empty:
+def _plot_monthly(df: pd.DataFrame) -> go.Figure:
+    """月度分布图。"""
+    df_copy = df.copy()
+    df_copy["month"] = df_copy["date"].dt.to_period("M")
+    monthly = df_copy.groupby("month").agg(
+        count=("title", "count"), views=("views", "sum"),
+    ).sort_index()
+    if monthly.empty:
         return go.Figure()
 
-    # Create label with platform + content snippet
-    labels = [
-        f"[{row['platform']}] {str(row.get('content', ''))[:40]}"
-        for _, row in top.iterrows()
-    ]
-
-    fig = go.Figure(go.Bar(
-        x=top["total_engagement"],
-        y=labels,
-        orientation="h",
-        marker_color="#636EFA",
-        text=top["total_engagement"],
-        textposition="outside",
-    ))
-
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(go.Bar(
+        x=[str(m) for m in monthly.index], y=monthly["count"].values,
+        name="发布数量 / Video Count", marker_color=COLOR_PRIMARY, opacity=0.7,
+    ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+        x=[str(m) for m in monthly.index], y=monthly["views"].values,
+        name="播放量 / Views", mode="lines+markers",
+        line=dict(color=COLOR_SECONDARY, width=3), marker=dict(size=8),
+    ), secondary_y=True)
     fig.update_layout(
-        title=f"Top {top_n} 热门帖子 / Top {top_n} Posts by Engagement",
-        xaxis_title="总互动 / Total Engagement",
-        yaxis_title="帖子 / Post",
-        height=max(400, top_n * 35),
-        yaxis=dict(autorange="reversed"),
+        title=dict(text="月度分布 / Monthly Distribution", font=dict(size=16)),
+        height=380, margin=dict(l=50, r=50, t=60, b=40),
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    fig.update_yaxes(title_text="发布数量 / Count", secondary_y=False)
+    fig.update_yaxes(title_text="播放量 / Views", secondary_y=True)
+    fig.update_xaxes(title_text="月份 / Month")
+    return fig
+
+
+def _plot_heatmap(df: pd.DataFrame) -> go.Figure:
+    """发布时间热力图。"""
+    df_copy = df.copy()
+    df_copy["weekday"] = df_copy["date"].dt.dayofweek
+    df_copy["hour"] = df_copy["date"].dt.hour
+
+    pivot = df_copy.pivot_table(
+        index="weekday", columns="hour", values="title",
+        aggfunc="count", fill_value=0,
+    )
+    weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    fig = go.Figure(data=go.Heatmap(
+        z=pivot.values, x=list(range(24)),
+        y=[weekdays[i] for i in pivot.index],
+        colorscale=[[0, "#f1f2f3"], [0.5, COLOR_PRIMARY], [1.0, COLOR_SECONDARY]],
+        hovertemplate="星期: %{y}<br>小时: %{x}:00<br>数量: %{z}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="发布时间热力图 / Upload Time Heatmap", font=dict(size=16)),
+        height=380, margin=dict(l=50, r=30, t=60, b=40),
+        template="plotly_white",
+        xaxis_title="小时 / Hour", yaxis_title="星期 / Weekday",
     )
     return fig
 
 
-def create_hashtag_chart(df: pd.DataFrame, top_n: int = 15) -> go.Figure:
-    """Create bar chart of top hashtags.
-    创建热门标签柱状图。
-    """
-    freq = compute_word_frequency(df, top_n)
-    if freq.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="暂无标签数据 / No hashtag data", showarrow=False, font_size=20)
-        return fig
+def _generate_insights(df: pd.DataFrame, info: dict) -> list[str]:
+    """生成洞察。"""
+    if df.empty:
+        return ["暂无数据 / No data"]
 
-    fig = px.bar(
-        freq, x="count", y="hashtag",
-        orientation="h",
-        title=f"Top {top_n} 热门标签 / Top {top_n} Hashtags",
-        labels={"count": "出现次数 / Count", "hashtag": "标签 / Hashtag"},
-        color="count",
-        color_continuous_scale="Viridis",
-    )
-    fig.update_layout(yaxis=dict(autorange="reversed"))
-    return fig
+    insights: list[str] = []
+    weekday_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    en_weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+    df_copy = df.copy()
+    df_copy["weekday"] = df_copy["date"].dt.dayofweek
+    df_copy["hour"] = df_copy["date"].dt.hour
 
-# --- Report Generation ---
-def generate_summary_markdown(overview: dict, platform_stats: pd.DataFrame) -> str:
-    """Generate a markdown summary report.
-    生成 Markdown 摘要报告。
-    """
-    if not overview:
-        return "暂无数据，请上传 CSV 或加载示例数据。\nNo data. Please upload CSV or load sample data."
-
-    lines = ["## 📊 数据分析摘要 / Analysis Summary\n"]
-    lines.append(f"**分析周期 / Period**: {overview.get('date_range', 'N/A')}")
-    lines.append(f"**帖子总数 / Total Posts**: {overview.get('total_posts', 0)}")
-    lines.append(f"**覆盖平台 / Platforms**: {overview.get('platforms', 0)}")
-    lines.append("")
-
-    lines.append("### 互动指标 / Engagement Metrics\n")
-    lines.append("| 指标 / Metric | 数值 / Value |")
-    lines.append("|--------------|-------------|")
-    lines.append(f"| 总点赞 / Total Likes | {overview.get('total_likes', 0):,} |")
-    lines.append(f"| 总转发 / Total Shares | {overview.get('total_shares', 0):,} |")
-    lines.append(f"| 总评论 / Total Comments | {overview.get('total_comments', 0):,} |")
-    lines.append(f"| 总浏览 / Total Views | {overview.get('total_views', 0):,} |")
-    lines.append(f"| 总互动 / Total Engagement | {overview.get('total_engagement', 0):,} |")
-    lines.append(f"| 平均互动 / Avg per Post | {overview.get('avg_engagement_per_post', 1):,} |")
-    lines.append(f"| 互动率 / Engagement Rate | {overview.get('engagement_rate', 0)}% |")
-    lines.append("")
-
-    if not platform_stats.empty:
-        lines.append("### 平台对比 / Platform Comparison\n")
-        lines.append("| 平台 / Platform | 总互动 / Total | 平均互动 / Avg | 互动率 / Rate |")
-        lines.append("|----------------|---------------|---------------|-------------|")
-        for _, row in platform_stats.iterrows():
-            lines.append(
-                f"| {row['platform']} | {row['total_engagement_sum']:,.0f} | "
-                f"{row['total_engagement_mean']:,.0f} | {row.get('engagement_rate', 0)}% |"
-            )
-
-    return "\n".join(lines)
-
-
-def export_summary_csv(overview: dict, platform_stats: pd.DataFrame) -> str:
-    """Export summary data as CSV file path.
-    将摘要数据导出为 CSV。
-    """
-    import tempfile, os
-
-    # Create summary DataFrame
-    summary_data = {
-        "metric": [
-            "total_posts", "total_likes", "total_shares", "total_comments",
-            "total_views", "total_engagement", "avg_engagement_per_post",
-            "engagement_rate", "date_range"
-        ],
-        "value": [
-            overview.get("total_posts", 0),
-            overview.get("total_likes", 0),
-            overview.get("total_shares", 0),
-            overview.get("total_comments", 0),
-            overview.get("total_views", 0),
-            overview.get("total_engagement", 0),
-            overview.get("avg_engagement_per_post", 0),
-            overview.get("engagement_rate", 0),
-            overview.get("date_range", ""),
-        ],
-    }
-    summary_df = pd.DataFrame(summary_data)
-
-    # Save to temp file
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filepath = os.path.join(tempfile.gettempdir(), f"social_media_summary_{timestamp}.csv")
-
-    with open(filepath, "w", encoding="utf-8-sig") as f:
-        f.write("=== Social Media Analysis Summary ===\n")
-        summary_df.to_csv(f, index=False)
-        if not platform_stats.empty:
-            f.write("\n=== Platform Comparison ===\n")
-            platform_stats.to_csv(f, index=False)
-
-    return filepath
-
-
-# --- Main Analysis Pipeline ---
-def run_analysis(df: pd.DataFrame) -> dict:
-    """Run full analysis pipeline and return all results.
-    运行完整分析管线并返回所有结果。
-    """
-    if df is None or df.empty:
-        return {
-            "summary_md": "请上传 CSV 数据或加载示例数据。\nPlease upload CSV or load sample data.",
-            "overview": {},
-            "platform_stats": pd.DataFrame(),
-            "top_posts": pd.DataFrame(),
-            "optimal_time": pd.DataFrame(),
-            "word_freq": pd.DataFrame(),
-            "fig_trend": go.Figure(),
-            "fig_platform": go.Figure(),
-            "fig_optimal_time": go.Figure(),
-            "fig_top_posts": go.Figure(),
-            "fig_hashtag": go.Figure(),
-            "csv_path": None,
-        }
-
-    # Run all analyses
-    overview = compute_overview(df)
-    platform_stats = compute_platform_comparison(df)
-    top_posts = compute_top_posts(df, top_n=10)
-    optimal_time = compute_optimal_time(df)
-    word_freq = compute_word_frequency(df, top_n=15)
-
-    # Generate summary
-    summary_md = generate_summary_markdown(overview, platform_stats)
-
-    # Generate all charts
-    fig_trend = create_trend_chart(df)
-    fig_platform = create_platform_bar_chart(df)
-    fig_optimal_time = create_optimal_time_heatmap(df)
-    fig_top_posts = create_top_posts_chart(df, top_n=10)
-    fig_hashtag = create_hashtag_chart(df, top_n=15)
-
-    # Export CSV
-    csv_path = export_summary_csv(overview, platform_stats)
-
-    return {
-        "summary_md": summary_md,
-        "overview": overview,
-        "platform_stats": platform_stats,
-        "top_posts": top_posts,
-        "optimal_time": optimal_time,
-        "word_freq": word_freq,
-        "fig_trend": fig_trend,
-        "fig_platform": fig_platform,
-        "fig_optimal_time": fig_optimal_time,
-        "fig_top_posts": fig_top_posts,
-        "fig_hashtag": fig_hashtag,
-        "csv_path": csv_path,
-    }
-
-
-# --- Gradio UI ---
-# Global state to hold analyzed data for export
-_state = {"df": None, "results": None}
-
-
-def on_upload_csv(file):
-    """Handle CSV file upload.
-    处理 CSV 文件上传。
-    """
-    try:
-        df = process_uploaded_file(file)
-        _state["df"] = df
-        results = run_analysis(df)
-        _state["results"] = results
-        return _display_results(results)
-    except Exception as e:
-        error_md = f"❌ **错误 / Error**: {str(e)}"
-        empty_fig = go.Figure()
-        empty_fig.add_annotation(text="请上传有效 CSV / Upload valid CSV", showarrow=False, font_size=20)
-        return (error_md, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, None)
-
-
-def on_load_sample(days):
-    """Handle sample data loading.
-    处理示例数据加载。
-    """
-    df = generate_sample_data(days)
-    _state["df"] = df
-    results = run_analysis(df)
-    _state["results"] = results
-    return _display_results(results)
-
-
-def _display_results(results: dict):
-    """Unpack results tuple for Gradio outputs.
-    解包结果元组供 Gradio 输出。
-    """
-    return (
-        results["summary_md"],
-        results["fig_trend"],
-        results["fig_platform"],
-        results["fig_optimal_time"],
-        results["fig_top_posts"],
-        results["fig_hashtag"],
-        results["csv_path"],
+    best_w = df_copy.groupby("weekday")["views"].sum().idxmax()
+    best_h = df_copy.groupby("hour")["views"].sum().idxmax()
+    insights.append(
+        f"🗓️ 最佳发布时间 / Best Upload Time: "
+        f"{weekday_names[best_w]} {best_h}:00 ({en_weekdays[best_w]} {best_h}:00)"
     )
 
+    total = df["views"].sum()
+    top5 = df.nlargest(5, "views")["views"].sum()
+    ratio = round(top5 / total * 100, 1) if total > 0 else 0
+    insights.append(
+        f"📊 头部集中度 / Top Concentration: "
+        f"Top 5 视频贡献 {ratio}% 总播放量"
+    )
 
-def on_export_csv():
-    """Handle CSV export button.
-    处理 CSV 导出按钮。
-    """
-    if _state["results"] and _state["results"]["csv_path"]:
-        return _state["results"]["csv_path"]
-    return None
+    avg_er = round(df["engagement_rate"].mean(), 2)
+    level = "高 / High" if avg_er >= 5 else ("中等 / Medium" if avg_er >= 2 else "低 / Low")
+    insights.append(f"💬 平均互动率 / Avg Engagement Rate: {avg_er}% ({level})")
 
+    df_copy["month"] = df_copy["date"].dt.to_period("M")
+    monthly_count = df_copy.groupby("month").size()
+    avg_monthly = round(monthly_count.mean(), 1) if len(monthly_count) > 0 else 0
+    insights.append(
+        f"📈 更新频率 / Upload Frequency: 平均每月 {avg_monthly} 条视频"
+    )
 
-# --- Build UI ---
-with gr.Blocks(title="Social Media Analyzer / 社媒数据分析器") as demo:
-    gr.Markdown("""
-    # 📊 社媒数据分析器 / Social Media Analyzer
-
-    Upload your social media data or use sample data to generate a full analytics report.
-    上传社媒数据或使用示例数据生成完整分析报告。
-    """)
-
-    with gr.Tab("数据输入 / Data Input"):
-        with gr.Row():
-            file_upload = gr.File(
-                label="上传 CSV 文件 / Upload CSV File",
-                file_types=[".csv"],
-                file_count="single",
-            )
-        with gr.Row():
-            gr.Markdown("""
-            **CSV 格式要求 / CSV Format Requirements:**
-
-            Required columns: `date`, `platform`
-            Optional columns: `likes`, `shares`, `comments`, `views`, `content`, `hashtags`, `post_type`, `hour`
-
-            必需列：`date`（日期）, `platform`（平台）
-            可选列：`likes`（点赞）, `shares`（转发）, `comments`（评论）, `views`（浏览）, `content`（内容）, `hashtags`（标签）, `post_type`（类型）, `hour`（时段）
-            """)
-
-        with gr.Row():
-            sample_days = gr.Slider(
-                minimum=7, maximum=90, value=30, step=1,
-                label="示例数据天数 / Sample Data Days"
-            )
-            load_sample_btn = gr.Button(
-                "📥 加载示例数据 / Load Sample Data",
-                variant="primary",
-            )
-
-    with gr.Tab("分析报告 / Analysis Report"):
-        summary_output = gr.Markdown(
-            label="分析摘要 / Summary",
-            value="上传 CSV 或加载示例数据开始分析。\nUpload CSV or load sample data to start analysis.",
+    recent = df[df["date"] >= pd.Timestamp.now() - pd.Timedelta(days=90)]
+    older = df[df["date"] < pd.Timestamp.now() - pd.Timedelta(days=90)]
+    if len(recent) > 0 and len(older) > 0:
+        recent_avg = recent["views"].mean()
+        older_avg = older["views"].mean()
+        if recent_avg > older_avg * 1.2:
+            trend = "上升 / ↑ Rising"
+        elif recent_avg < older_avg * 0.8:
+            trend = "下降 / ↓ Declining"
+        else:
+            trend = "稳定 / → Stable"
+        insights.append(
+            f"📉 近期趋势 / Recent Trend: {trend}"
         )
 
-    with gr.Tab("可视化图表 / Visualizations"):
-        with gr.Row():
-            fig_trend = gr.Plot(label="互动趋势 / Engagement Trend")
-        with gr.Row():
-            fig_platform = gr.Plot(label="平台对比 / Platform Comparison")
-        with gr.Row():
-            fig_optimal_time = gr.Plot(label="最佳发帖时间 / Optimal Posting Time")
-        with gr.Row():
-            fig_top_posts = gr.Plot(label="热门帖子 / Top Posts")
-        with gr.Row():
-            fig_hashtag = gr.Plot(label="热门标签 / Top Hashtags")
+    return insights
 
-    with gr.Tab("导出 / Export"):
-        gr.Markdown("下载分析结果 CSV 文件。\nDownload analysis results as CSV.")
-        export_btn = gr.Button("📥 导出报告 / Export Report", variant="primary")
-        csv_output = gr.File(label="下载 / Download", file_count="single")
 
-    # --- Wire up events ---
-    file_upload.change(
-        fn=on_upload_csv,
-        inputs=[file_upload],
-        outputs=[summary_output, fig_trend, fig_platform, fig_optimal_time,
-                 fig_top_posts, fig_hashtag, csv_output],
-    )
+def load_up(mid: int, max_videos: int = 30, live: bool = False):
+    """加载 UP 主数据。返回 9 个值匹配 outputs (含 status)。"""
+    try:
+        # 优先从 JSON 加载
+        info, df = _load_from_json(mid)
 
-    load_sample_btn.click(
-        fn=on_load_sample,
-        inputs=[sample_days],
-        outputs=[summary_output, fig_trend, fig_platform, fig_optimal_time,
-                 fig_top_posts, fig_hashtag, csv_output],
-    )
+        # 如果 JSON 没有，尝试实时 API
+        if info is None or df.empty:
+            if live:
+                info, df = _fetch_live(mid, max_videos)
+            else:
+                raise ValueError(
+                    f"UID {mid} 无预取数据。请点击「实时获取」或选择其他 UP 主。\n"
+                    f"No pre-fetched data for UID {mid}. Click 'Live Fetch' or select another creator."
+                )
 
-    export_btn.click(
-        fn=on_export_csv,
-        outputs=[csv_output],
-    )
+        if df.empty:
+            raise ValueError("未找到视频数据 / No videos found")
 
-# --- Entry Point ---
+        # 确保数值列正确转换（双重保险）
+        numeric_cols = ["views", "likes", "favorites", "comments", "shares", "engagement"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+        if "engagement_rate" in df.columns:
+            df["engagement_rate"] = pd.to_numeric(df["engagement_rate"], errors="coerce").fillna(0.0).astype(float)
+
+        cards = _build_kpi_cards(info, df)
+
+        # 构建 KPI HTML
+        kpi_html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0;">'
+        for c in cards:
+            kpi_html += f'''
+            <div style="background:linear-gradient(135deg,#f8f9fa,#e9ecef);border-radius:12px;padding:16px;
+                        border-left:4px solid {COLOR_PRIMARY};box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+                <div style="color:#666;font-size:12px;margin-bottom:6px;">{c['label']}</div>
+                <div style="font-size:24px;font-weight:700;color:{COLOR_PRIMARY};">{c['value']}</div>
+                <div style="color:#999;font-size:11px;margin-top:4px;">{c['sub']}</div>
+            </div>'''
+        kpi_html += "</div>"
+
+        # UP 主信息卡
+        name = info.get("name", "Unknown")
+        followers = info.get("followers", 0)
+        video_count = info.get("video_count", len(df))
+        up_html = f'''
+        <div style="background:linear-gradient(90deg,{COLOR_PRIMARY},{COLOR_SECONDARY});
+                    border-radius:16px;padding:24px;color:white;margin-bottom:16px;
+                    display:flex;align-items:center;gap:20px;box-shadow:0 4px 20px rgba(0,174,236,0.3);">
+            <div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,0.3);
+                        display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;">
+                {name[0] if name else "?"}
+            </div>
+            <div style="flex:1;">
+                <div style="font-size:22px;font-weight:700;">{name}</div>
+                <div style="font-size:13px;opacity:0.95;margin-top:4px;">
+                    UID: {mid} · 粉丝 / Followers: {_fmt_num(followers)} · 
+                    视频 / Videos: {video_count}
+                </div>
+            </div>
+        </div>'''
+
+        # 生成图表
+        fig_trend = _plot_trend(df)
+        fig_top = _plot_top_videos(df)
+        fig_monthly = _plot_monthly(df)
+        fig_heatmap = _plot_heatmap(df)
+
+        # 洞察
+        insights = _generate_insights(df, info)
+        insights_html = "<div style='padding:8px 0;'>" + "</div><div style='padding:8px 0;'>".join(insights) + "</div>"
+
+        # 数据表
+        table_df = df.head(50)[["title", "date", "views", "likes", "favorites", "comments", "engagement_rate"]].copy()
+        table_df.columns = ["标题 / Title", "日期 / Date", "播放 / Views", "点赞 / Likes",
+                           "投币 / Favorites", "评论 / Comments", "互动率 / ER%"]
+
+        status_msg = "✅ 已加载（缓存）/ Loaded (Cached)"
+        if live:
+            status_msg = "✅ 已加载（实时）/ Loaded (Live)"
+
+        return (
+            up_html, kpi_html, fig_trend, fig_top, fig_monthly, fig_heatmap,
+            insights_html, table_df, status_msg,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        error_html = f'<div style="background:#ffebee;color:#c62828;padding:16px;border-radius:8px;margin:12px 0;white-space:pre-wrap;">'
+        error_html += f"❌ 错误 / Error: {str(e)}"
+        error_html += "</div>"
+        return (error_html, "", None, None, None, None, "", pd.DataFrame(), "❌ 加载失败 / Failed")
+
+
+def build_app():
+    """构建 Gradio 应用。"""
+    with gr.Blocks(title="B站 UP 主数据分析器 / Bilibili Creator Data Analyzer") as app:
+
+        gr.HTML("""
+        <div style="background:linear-gradient(90deg,#00AEEC,#FB7299);color:white;padding:20px;border-radius:16px;margin-bottom:20px;text-align:center;">
+            <h1 style="margin:0;font-size:28px;">📺 B站 UP 主数据分析器</h1>
+            <p style="margin:4px 0 0 0;opacity:0.95;font-size:14px;">
+                Bilibili Creator Data Analyzer · 实时 API 数据 · 智能洞察仪表盘
+            </p>
+        </div>
+        """)
+
+        with gr.Row(equal_height=False):
+            # 左侧控制
+            with gr.Column(scale=1):
+                gr.Markdown("### 🔍 选择 UP 主 / Select Creator")
+
+                preset = gr.Radio(
+                    choices=[f"{n} ({uid})" for n, uid in PRESET_UPS],
+                    value=f"{PRESET_UPS[0][0]} ({PRESET_UPS[0][1]})",
+                    label="预设 / Presets",
+                )
+                uid_input = gr.Number(
+                    label="或输入 UID / Or enter UID",
+                    value=946974, precision=0,
+                )
+                fetch_btn = gr.Button("🚀 分析 (本地缓存) / Analyze (Cached)", variant="primary")
+                live_btn = gr.Button("🌐 实时获取 / Live Fetch", variant="secondary")
+
+                status = gr.Textbox(label="状态 / Status", interactive=False, value="就绪 / Ready")
+
+                gr.Markdown("---")
+                gr.Markdown("### 📦 导出 / Export")
+                export_btn = gr.Button("⬇️ 导出 CSV / Export CSV")
+                csv_file = gr.File(label="下载 / Download", file_types=[".csv"])
+
+            # 右侧仪表板
+            with gr.Column(scale=3):
+                up_header = gr.HTML()
+                kpi_html = gr.HTML()
+
+                with gr.Row():
+                    fig_trend = gr.Plot()
+                    fig_top = gr.Plot()
+
+                with gr.Row():
+                    fig_monthly = gr.Plot()
+                    fig_heatmap = gr.Plot()
+
+                gr.Markdown("### 💡 数据洞察 / Insights")
+                insights_html = gr.HTML()
+
+                gr.Markdown("### 📋 视频数据表 / Video Data Table")
+                table = gr.Dataframe(wrap=True)
+
+        # ── 事件绑定 ──────────────────────────────────────────────────
+        def on_preset_change(preset_str, current_uid):
+            for name, uid in PRESET_UPS:
+                if f"{name} ({uid})" == preset_str:
+                    return uid
+            return current_uid
+
+        def on_fetch(uid):
+            return load_up(int(uid), live=False)
+
+        def on_live(uid):
+            return load_up(int(uid), live=True)
+
+        preset.change(on_preset_change, [preset, uid_input], uid_input)
+        outputs = [up_header, kpi_html, fig_trend, fig_top, fig_monthly, fig_heatmap,
+                   insights_html, table, status]
+
+        fetch_btn.click(on_fetch, [uid_input], outputs)
+        live_btn.click(on_live, [uid_input], outputs)
+
+        def on_export(table_df):
+            if table_df is None or table_df.empty:
+                return None
+            path = "bilibili_data.csv"
+            table_df.to_csv(path, index=False, encoding="utf-8-sig")
+            return path
+
+        export_btn.click(on_export, [table], csv_file)
+
+        # 启动时自动加载示例
+        def _load_demo():
+            try:
+                # 写调试日志到文件
+                debug_path = os.path.join(os.path.dirname(__file__), "debug.log")
+                with open(debug_path, "w", encoding="utf-8") as f:
+                    f.write("_load_demo called\n")
+                    f.write(f"DATA_DIR: {DATA_DIR}\n")
+                    f.write(f"JSON exists: {os.path.exists(os.path.join(DATA_DIR, 'up_946974.json'))}\n")
+                res = load_up(946974, live=False)
+                with open(debug_path, "a", encoding="utf-8") as f:
+                    f.write(f"load_up returned {len(res)} values\n")
+                    f.write(f"status: {res[8] if len(res) > 8 else 'N/A'}\n")
+                return res
+            except Exception as e:
+                import traceback
+                debug_path = os.path.join(os.path.dirname(__file__), "debug.log")
+                with open(debug_path, "a", encoding="utf-8") as f:
+                    f.write(f"ERROR: {e}\n")
+                    f.write(traceback.format_exc())
+                raise
+
+        app.load(fn=_load_demo, outputs=outputs)
+
+    return app
+
+
 if __name__ == "__main__":
-    demo.launch(share=False, server_port=7861)
+    app = build_app()
+    app.launch(
+        server_name="127.0.0.1", server_port=7861, share=False,
+        theme=gr.themes.Soft(),
+    )

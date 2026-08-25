@@ -9,8 +9,8 @@
 
 | # | 项目 | 目录 | 状态 | 技术栈 |
 |---|------|------|------|--------|
-| 01 | **AI 文案生成器** / AI Copywriting Tool | [`01-ai-copywriting-tool/`](./01-ai-copywriting-tool/) |  **已上线** [Live Demo](https://portfolio-projects-hhqpm6fcbqyatir4qxjxcc.streamlit.app/) | Python · Streamlit · DeepSeek API |
-| 02 | **社媒数据分析器** / Social Media Analyzer | [`02-social-media-analyzer/`](./02-social-media-analyzer/) | 🟡 开发中 | Python · Pandas · Streamlit |
+| 01 | **AI 文案生成器** / AI Copywriting Tool | [`01-ai-copywriting-tool/`](./01-ai-copywriting-tool/) |  **已上线** [Live Demo](https://portfolio-projects-hhqpm6fcbqyatir4qxjxcc.streamlit.app/) | Python · Streamlit · DeepSeek API · Glassmorphism UI |
+| 02 | **B站 UP 主数据分析器** / Bilibili Creator Analyzer | [`02-social-media-analyzer/`](./02-social-media-analyzer/) | 🟡 开发中 | Python · Streamlit · Plotly · B站 API · Glassmorphism UI |
 | 03 | **自动化工作流引擎** / Automation Workflow Engine | [`03-automation-workflow/`](./03-automation-workflow/) | 🔴 待开发 | Python · DeepSeek API |
 
 ---
