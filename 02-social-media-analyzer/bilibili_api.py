@@ -849,6 +849,12 @@ class PlaywrightBiliSession:
             raise RuntimeError("B站风控系统拦截 / Bilibili risk control blocked.")
         if code != 0:
             msg = data.get("message", "Unknown error")
+            if code == -403:
+                raise RuntimeError(
+                    "该 UP 主需要登录才能查看视频列表 / "
+                    "This UP requires login. 请切换到 Cookie 模式 / "
+                    "Switch to Cookie mode and paste your Bilibili cookie."
+                )
             if code == -404:
                 raise RuntimeError(f"UID 不存在 / UID not found: {msg}")
             raise RuntimeError(f"API 错误 (code={code}) / API error: {msg}")

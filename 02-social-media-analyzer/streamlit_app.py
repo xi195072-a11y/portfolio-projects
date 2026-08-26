@@ -366,16 +366,40 @@ def _fetch_live(
         return info_dict, df
     except RuntimeError as e:
         err_msg = str(e)
-        # Playwright 被反爬拦截 + 有 Cookie → 自动回退 Cookie 模式
-        if "412" in err_msg and use_playwright is not False and user_cookie:
+        # -403: UP 主需要登录 → 建议切换 Cookie 模式
+        if "-403" in err_msg and use_playwright is not False:
+            if user_cookie:
+                st.warning("🎭 Playwright 匿名模式无权查看此 UP，自动切换 Cookie 模式 / Playwright anonymous denied, falling back to Cookie")
+                try:
+                    from bilibili_api import quick_fetch
+                    info, df = quick_fetch(
+                        mid, max_videos=max_videos,
+                        user_cookie=user_cookie, use_playwright=False,
+                    )
+                    if not df.empty:
+                        info_dict = {
+                            "mid": info.mid, "name": info.name,
+                            "face": info.face, "followers": info.followers,
+                            "video_count": info.video_count or len(df),
+                        }
+                        return info_dict, df
+                except Exception as e2:
+                    err_msg = f"Cookie 模式也失败: {e2}"
+            else:
+                err_msg = (
+                    "该 UP 主需要登录才能查看视频数据 / "
+                    "This UP requires login.\n\n"
+                    "请在侧边栏「🔑 B站登录」区域粘贴你的 SESSDATA Cookie，"
+                    "或切换到「🍪 Cookie 模式」。"
+                )
+        # 412 反爬 + 有 Cookie → 自动回退
+        elif "412" in err_msg and use_playwright is not False and user_cookie:
             st.warning("🎭 Playwright 触发反爬，自动切换到 Cookie 模式 / Anti-bot triggered, falling back to Cookie mode")
             try:
                 from bilibili_api import quick_fetch
                 info, df = quick_fetch(
-                    mid,
-                    max_videos=max_videos,
-                    user_cookie=user_cookie,
-                    use_playwright=False,  # 强制 Cookie 模式
+                    mid, max_videos=max_videos,
+                    user_cookie=user_cookie, use_playwright=False,
                 )
                 if not df.empty:
                     info_dict = {
@@ -385,9 +409,9 @@ def _fetch_live(
                     }
                     return info_dict, df
             except Exception as e2:
-                err_msg = f"Playwright 反爬 + Cookie 也失败: {e2}"
-        # 没有 Cookie 但 Playwright 被封 → 给出清晰指引
-        elif "412" in err_msg and use_playwright is not False and not user_cookie:
+                err_msg = f"Cookie 模式也失败: {e2}"
+        # 412 + 无 Cookie → 指引
+        elif "412" in err_msg and use_playwright is not False:
             err_msg = (
                 "Playwright 触发 B站反爬 (412)。建议：\n"
                 "1. 等待几分钟后重试（IP 冷却）\n"

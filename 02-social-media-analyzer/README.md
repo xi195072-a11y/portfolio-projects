@@ -19,9 +19,9 @@ A glassmorphism-style Streamlit dashboard for analyzing Bilibili UP main creator
 
 - **📺 UP 主搜索**: 按 UID 查询 / 预设 UP 主一键切换（影视飓风、老番茄、半佛仙人、UID 2/3/4/14476927…）
 - **🎯 两种抓取模式 / Two Fetch Modes**：
-  - **🤖 自动模式（推荐）**：如果装了 Playwright，直接用「真实浏览器」搜，**无需登录 B站、无需复制 Cookie**
+  - **🤖 自动模式（推荐）**：如果装了 Playwright，直接用「真实浏览器」搜，**无需登录 B站、无需复制 Cookie**。但大 UP 主可能触发权限限制，系统自动回退 Cookie 模式
   - **🎭 Playwright 真实浏览器**：强制使用 Playwright（复用系统 Chrome，不用额外下浏览器）
-  - **🍪 Cookie 模式（requests）**：走 requests 库 + SESSDATA，支持自动从 Chrome 读取 Cookie / 手动粘贴
+  - **🍪 Cookie 模式（requests）**：走 requests 库 + SESSDATA，支持自动从 Chrome 读取 Cookie / 手动粘贴。**推荐在搜索头部/认证 UP 主时使用**
 - **📊 8 个 KPI 卡片**: 总播放量、粉丝数、视频总数、总评论、平均播放、最高单作、互动率、近 30 天播放
 - **📈 5 个交互式图表**:
   - 播放量趋势（含 7 日均线）
@@ -121,17 +121,42 @@ streamlit run streamlit_app.py --server.port 8502
 | Cookie 模式回退（requests + SESSDATA）搜 UID 450542066 | ✅ 成功 |
 | 预设切换 + 自定义 UID 输入保留 | ✅（修复了 session_state 死循环 bug） |
 | Streamlit UI 无 st.stop() 导致的 React DOM removeChild 报错 | ✅（全部改为 if/elif/else 条件渲染） |
+| 反爬硬化：限速 2-4s + 每 15 次重建页面 + 412 自动恢复 | ✅ 450542066 恢复成功，25s 返回 |
+| -403 大 UP 主权限限制 | ✅ 正确识别：946974/37663924 返回明确错误提示 |
+| 自动回退：Playwright→Cookie 模式 | ✅ 412/-403 时自动切换，无需用户干预 |
 
 ## 🔑 About B站反爬 / B站 Anti-Bot
+
+### 抓取模式选择策略 / Fetch Mode Strategy
+
+B站对不同规模 UP 主的视频列表 API 采取了**差异化访问策略**：
+
+| UID 规模 | 🤖 Playwright 匿名模式 | 🍪 Cookie 模式 |
+|----------|----------------------|---------------|
+| **小 UP**（<1w 粉丝，公开数据） | ✅ 直接可用 | ✅ 可用 |
+| **中大 UP**（有一定粉丝基础） | ⚠️ 可能触发 412 反爬 | ✅ 稳定可靠 |
+| **认证/头部 UP**（影视飓风、老番茄等） | ❌ 返回 -403 访问权限不足 | ✅ 必须使用 |
+
+> **结论**：Playwright 模式适合快速搜索小 UP 主、无需登录；搜索大 UP 主（粉丝多的、认证的）时，系统会自动回退到 Cookie 模式（如已提供 Cookie）。
+
+### 自动回退逻辑 / Auto-Fallback
+
+1. **Playwright → 412 反爬** + 已有 Cookie → 自动切 Cookie 模式重试
+2. **Playwright → -403 权限不足** + 已有 Cookie → 自动切 Cookie 模式重试
+3. **Playwright → 失败** + 无 Cookie → 给出 3 条建议（IP 冷却 / 切 Cookie 模式 / 换 VPN）
+
+### Playwright 绕过策略细节
 
 本项目的 Playwright 绕过策略（`bilibili_api.py` `PlaywrightBiliSession`）：
 
 1. **复用系统 Chrome**：找本地已装 Chrome/Edge，不用下载 Chromium for Testing
 2. **去自动化指纹 init_script**：`navigator.webdriver→undefined`、补 `plugins/languages/window.chrome`
 3. **启动参数**：`--disable-blink-features=AutomationControlled --no-sandbox`
-4. **warm_up**：先 `goto("https://www.bilibili.com/", wait_until="networkidle")` + sleep 2s，等 `buvid3/buvid4/buvid_fp` 风控 Cookie 生成
+4. **warm_up**：先 `goto("https://www.bilibili.com/", wait_until="networkidle")` + sleep 3s，等 `buvid3/buvid4/buvid_fp` 风控 Cookie 生成 + 验证 buvid3 存在
 5. **所有 API 请求都在页面上下文 `page.evaluate(fetch)`** 里发起，附带 `Referer: https://www.bilibili.com/`、`credentials: include`，保持真实浏览器的 Sec-Fetch 链
 6. **WBI 签名 + `dm_img_*` 画布指纹**：和 requests 模式一致
+7. **智能限速**：基础 2-4s 间隔 + 每 3 次额外 3-6s + 每 15 次自动重建页面刷新 Cookie/指纹
+8. **412 自动恢复**：销毁当前页面 → 冷却 5s → 重新 warm up → 重试一次
 
 ## 📸 Screenshots / 截图
 
