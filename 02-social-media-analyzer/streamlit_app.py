@@ -343,6 +343,10 @@ def _fetch_live(
 
     Args:
         use_playwright: None=自动（优先 Playwright）, True=Playwright, False=requests+Cookie
+
+    回退逻辑：
+    - Playwright 触发 412 反爬 → 自动回退 Cookie 模式（如果有 Cookie）
+    - Cookie 模式也失败 → 返回错误信息
     """
     try:
         from bilibili_api import quick_fetch
@@ -360,6 +364,38 @@ def _fetch_live(
             "video_count": info.video_count or len(df),
         }
         return info_dict, df
+    except RuntimeError as e:
+        err_msg = str(e)
+        # Playwright 被反爬拦截 + 有 Cookie → 自动回退 Cookie 模式
+        if "412" in err_msg and use_playwright is not False and user_cookie:
+            st.warning("🎭 Playwright 触发反爬，自动切换到 Cookie 模式 / Anti-bot triggered, falling back to Cookie mode")
+            try:
+                from bilibili_api import quick_fetch
+                info, df = quick_fetch(
+                    mid,
+                    max_videos=max_videos,
+                    user_cookie=user_cookie,
+                    use_playwright=False,  # 强制 Cookie 模式
+                )
+                if not df.empty:
+                    info_dict = {
+                        "mid": info.mid, "name": info.name,
+                        "face": info.face, "followers": info.followers,
+                        "video_count": info.video_count or len(df),
+                    }
+                    return info_dict, df
+            except Exception as e2:
+                err_msg = f"Playwright 反爬 + Cookie 也失败: {e2}"
+        # 没有 Cookie 但 Playwright 被封 → 给出清晰指引
+        elif "412" in err_msg and use_playwright is not False and not user_cookie:
+            err_msg = (
+                "Playwright 触发 B站反爬 (412)。建议：\n"
+                "1. 等待几分钟后重试（IP 冷却）\n"
+                "2. 切换到「🍪 Cookie 模式」并粘贴 B站 Cookie\n"
+                "3. 使用 VPN/代理更换 IP"
+            )
+        st.session_state["_last_error"] = err_msg
+        return None, pd.DataFrame()
     except Exception as e:
         # 错误信息存在 session_state 里，供上层决定如何显示
         st.session_state["_last_error"] = str(e)

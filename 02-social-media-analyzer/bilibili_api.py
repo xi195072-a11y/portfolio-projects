@@ -330,8 +330,8 @@ def fetch_up_videos(
             break
 
         page += 1
-        # 请求间隔：避免触发反爬
-        time.sleep(0.8)
+        # 请求间隔：避免触发反爬（每间隔 2.5-4.5 秒）
+        time.sleep(random.uniform(2.5, 4.5))
 
     if not all_videos:
         return pd.DataFrame(), total_count
@@ -647,13 +647,23 @@ class PlaywrightBiliSession:
 
     def _rate_limit(self) -> None:
         self._request_count += 1
-        delay = random.uniform(0.5, 2.0)
-        if self._request_count % 5 == 0:
-            delay += random.uniform(1.0, 3.0)
+        # 基础间隔：2-4 秒（加大间隔，降低反爬触发概率）
+        delay = random.uniform(2.0, 4.0)
+        # 每 3 次请求额外加 3-6 秒
+        if self._request_count % 3 == 0:
+            delay += random.uniform(3.0, 6.0)
         elapsed = time.time() - self._last_request_time
         if elapsed < delay:
             time.sleep(delay - elapsed)
         self._last_request_time = time.time()
+        # 每 15 次请求自动重建页面（刷新 cookie 和指纹）
+        if self._request_count % 15 == 0 and self._fetch_page is not None:
+            try:
+                if not self._fetch_page.is_closed():
+                    self._fetch_page.close()
+            except Exception:
+                pass
+            self._fetch_page = None
 
     # ── 页面内 fetch（关键：绕过 412 的核心） ──────────────────
     def _ensure_fetch_page(self) -> Any:
@@ -664,7 +674,12 @@ class PlaywrightBiliSession:
           buvid_fp 等风控 Cookie 正确生成。过早取 (domcontentloaded) 会导致 -352
         - 2~3 秒的等待让预取脚本 (prefetch JS) 落地 cookie
         """
-        if self._fetch_page is None or self._fetch_page.is_closed():
+        need_new = (
+            self._fetch_page is None
+            or self._fetch_page.is_closed()
+            or getattr(self, "_force_new_page", False)
+        )
+        if need_new:
             self._fetch_page = self._context.new_page()
             # 打开 bilibili.com 主站，等网络稳定
             try:
@@ -683,7 +698,18 @@ class PlaywrightBiliSession:
                     )
                 except Exception:
                     pass
-            time.sleep(2.0)  # 等待 cookie 和预取 JS 落地
+            # 等待 cookie 和预取 JS 充分落地 — 3 秒比 2 秒更稳
+            time.sleep(3.0)
+            # 验证 cookie 是否生成
+            try:
+                cookies = self._context.cookies()
+                cookie_names = {c["name"] for c in cookies}
+                if "buvid3" not in cookie_names:
+                    # 关键 cookie 缺失，再等 2 秒
+                    time.sleep(2.0)
+            except Exception:
+                pass
+            self._force_new_page = False
         return self._fetch_page
 
     def _json_fetch(self, url: str, params: dict[str, Any], timeout: int) -> tuple[int, str]:
@@ -795,7 +821,30 @@ class PlaywrightBiliSession:
 
         code = data.get("code", -1)
         if code == -412:
-            raise RuntimeError("B站反爬拦截 (412) / Bilibili anti-bot blocked request.")
+            # 触发反爬 → 销毁旧页面、重新 warm up 刷新 cookie 后重试一次
+            if not getattr(self, "_retry_on_412", False):
+                self._retry_on_412 = True
+                # 销毁 fetch_page，下次请求会重新打开 bilibili.com
+                try:
+                    if self._fetch_page is not None and not self._fetch_page.is_closed():
+                        self._fetch_page.close()
+                except Exception:
+                    pass
+                self._fetch_page = None
+                self._request_count = 0  # 重置请求计数
+                self._force_new_page = True
+                # 冷却 5 秒再重试
+                time.sleep(5.0)
+                # 重新 warm up
+                self.warm_up()
+                # 用刷新后的 session 重试
+                return self.get(url, params=params, signed=signed, timeout=timeout)
+            else:
+                self._retry_on_412 = False
+                raise RuntimeError(
+                    "B站反爬拦截 (412) / Bilibili anti-bot blocked request. "
+                    "建议等待几分钟后重试，或切换到 Cookie 模式。"
+                )
         if code == -352:
             raise RuntimeError("B站风控系统拦截 / Bilibili risk control blocked.")
         if code != 0:
@@ -847,7 +896,7 @@ def fetch_up_full_data(
 
     try:
         session.warm_up()
-        time.sleep(1.0)
+        time.sleep(2.0)
 
         # Step 1: 粉丝数（简单请求）
         followers = 0
@@ -861,14 +910,14 @@ def fetch_up_full_data(
         except Exception:
             pass
 
-        time.sleep(1.0)
+        time.sleep(2.0)
 
         # Step 2: 视频列表
         df, total_count = fetch_up_videos(session, mid, max_videos=max_videos)
         if total_count == 0 and not df.empty:
             total_count = len(df)
 
-        time.sleep(1.0)
+        time.sleep(2.0)
 
         # Step 3: UP 主信息
         info = UPInfo(mid=mid, name="", face="", sign="", level=0,
