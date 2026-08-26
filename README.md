@@ -42,6 +42,10 @@ $env:DEEPSEEK_API_KEY = "your-key"   # Windows
 streamlit run streamlit_app.py
 ```
 
+**截图 / Screenshots：**
+
+![01 Main UI](01-ai-copywriting-tool/screenshots/main-ui.png)
+
 ---
 
 ### 02 · B站 UP 主数据分析器 / Bilibili Creator Analyzer
@@ -68,6 +72,10 @@ pip install -r requirements.txt   # 安装 Playwright（推荐，免 Cookie）
 python run_app.py                  # 启动
 # 浏览器打开 http://localhost:8502
 ```
+
+**截图 / Screenshots：**
+
+![02 Main UI](02-social-media-analyzer/screenshots/main-ui.png)
 
 ---
 

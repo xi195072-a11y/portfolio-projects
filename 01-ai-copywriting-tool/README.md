@@ -143,10 +143,10 @@ Update the `lang_map` dictionary in `streamlit_app.py`.
 ## Screenshots (截图)
 
 ### Main UI / 主界面
-> 注：启动后运行 `streamlit run streamlit_app.py` 查看实时界面。截图将在后续更新。
+![Main UI](screenshots/main-ui.png)
 
 ### Generated Output / 生成结果
-> 在侧边栏输入 API Key → 填写主题/选择语气/长度/语言 → 点「🚀 Generate」即可生成文案。
+在侧边栏输入 API Key → 填写主题/选择语气/长度/语言 → 点「🚀 Generate」即可生成文案。
 
 ## Future Enhancements (未来改进)
 

@@ -135,6 +135,9 @@ streamlit run streamlit_app.py --server.port 8502
 
 ## 📸 Screenshots / 截图
 
+### 主界面 / Main Dashboard
+![Main UI](screenshots/main-ui.png)
+
 > 启动后运行 `python run_app.py` → 浏览器打开 `http://localhost:8502` 查看实时界面。
 > 
 > **典型工作流 / Typical Workflow：**
