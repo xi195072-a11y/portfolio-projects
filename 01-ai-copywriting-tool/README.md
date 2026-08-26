@@ -10,17 +10,22 @@ pinned: false
 
 # AI Copywriting Tool (AI 文案生成器)
 
-A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Streamlit and DeepSeek API, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length.
+A web-based AI copywriting tool that generates marketing copy for social media platforms. Built with Streamlit and DeepSeek API, supporting multiple languages (Chinese, English, Cantonese) and customizable tone/length. **Glassmorphism dark UI** with token optimization and session caching.
 
-基于 Streamlit 和 DeepSeek API 的 AI 文案生成工具，支持多语言（中文、英文、粤语）和可定制的语气/长度。
+基于 Streamlit 和 DeepSeek API 的 AI 文案生成工具，支持多语言（中文、英文、粤语）和可定制的语气/长度。毛玻璃深色主题 UI，Token 用量优化，会话级缓存。
 
 ## Features (功能)
 
 - **Multi-language Support**: Generate copy in Chinese, English, or Cantonese (支持中文、英文、粤语)
 - **Customizable Tone**: Professional, Casual, Humorous, Inspirational, or Urgent (5 种语气可选)
 - **Flexible Length**: Short (50-100 words), Medium (100-200 words), or Long (200-300 words) (3 种长度可选)
-- **One-Click Deployment**: Launch locally or deploy to HuggingFace Spaces (本地运行或部署到 HuggingFace)
-- **Example Templates**: Pre-built examples for quick testing (内置示例模板)
+- **One-Click Deployment**: Launch locally or deploy to HuggingFace / Streamlit Cloud (本地运行或部署到云端)
+- **Glassmorphism UI**: Dark theme with gradient titles, animated fade-in, and frosted-glass cards (毛玻璃深色主题)
+- **Session Caching**: Identical inputs return cached results instantly (会话级缓存，相同输入秒回)
+- **Token Optimization**: Smart token limits based on requested length (按长度智能控制 Token 用量)
+- **One-Click Copy**: Built-in copy button for generated output (一键复制生成结果)
+- **Robust Error Handling**: Auth errors, rate limits, timeouts, and connection failures (完善的错误处理)
+- **API Key Security**: Key stored only in session memory, never hard-coded or logged (Key 仅存于会话内存)
 
 ## Tech Stack (技术栈)
 
@@ -138,10 +143,10 @@ Update the `lang_map` dictionary in `streamlit_app.py`.
 ## Screenshots (截图)
 
 ### Main UI / 主界面
-![Main UI](screenshots/main-ui.png)
+> 注：启动后运行 `streamlit run streamlit_app.py` 查看实时界面。截图将在后续更新。
 
 ### Generated Output / 生成结果
-![Generated Copy](screenshots/generated-output.png)
+> 在侧边栏输入 API Key → 填写主题/选择语气/长度/语言 → 点「🚀 Generate」即可生成文案。
 
 ## Future Enhancements (未来改进)
 

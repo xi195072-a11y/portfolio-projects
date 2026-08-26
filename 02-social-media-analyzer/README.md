@@ -133,6 +133,17 @@ streamlit run streamlit_app.py --server.port 8502
 5. **所有 API 请求都在页面上下文 `page.evaluate(fetch)`** 里发起，附带 `Referer: https://www.bilibili.com/`、`credentials: include`，保持真实浏览器的 Sec-Fetch 链
 6. **WBI 签名 + `dm_img_*` 画布指纹**：和 requests 模式一致
 
+## 📸 Screenshots / 截图
+
+> 启动后运行 `python run_app.py` → 浏览器打开 `http://localhost:8502` 查看实时界面。
+> 
+> **典型工作流 / Typical Workflow：**
+> 1. 侧边栏选择「🤖 自动（推荐）」模式 — 自动检测 Playwright 可用
+> 2. 输入任意 B站 UID（如 `450542066`）
+> 3. 点「🌐 实时获取」— 约 15 秒返回分析结果（首次需 Playwright 启动）
+> 4. 查看 KPI 卡片、5 个交互图表、智能洞察
+> 5. 可选「📥 CSV 导出」下载全量数据
+
 ## 📝 Author / 作者
 
 小希 · GitHub: [@xi195072-a11y](https://github.com/xi195072-a11y)
