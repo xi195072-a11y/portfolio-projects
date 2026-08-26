@@ -4,7 +4,7 @@ Bilibili Creator Data Analyzer — Streamlit Glassmorphism Dashboard
 
 数据来源：
 - 默认：预取 JSON 文件（data/ 目录，稳定可靠）
-- 可选：实时 B站 API（dm_img_* + WBI 签名）
+- 可选：实时 B站 API（dm_img_* + WBI 签名 + Playwright）
 """
 from __future__ import annotations
 
@@ -13,13 +13,19 @@ import sys
 import json
 import tempfile
 
+# ── 关键：确保 Streamlit Runtime 子进程也能找到 .packages 里的依赖 ──
+# （Streamlit 会 fork 子进程执行用户代码，sys.path 不一定继承启动脚本的设置）
+_here = os.path.dirname(os.path.abspath(__file__))
+_pkgs = os.path.join(_here, ".packages")
+if os.path.isdir(_pkgs) and _pkgs not in sys.path:
+    sys.path.insert(0, _pkgs)
+if _here not in sys.path:
+    sys.path.insert(0, _here)
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-
-# 本地依赖路径（requests 等）
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".packages"))
 
 # 数据目录
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -44,8 +50,8 @@ GLASS_CSS = """
 :root {
     --bg: #0a0e14;
     --txt: #ffffff;
-    --txt-2: #d4d8e0;
-    --muted: #a8afba;
+    --txt-2: #e0e4ec;
+    --muted: #b8c0cc;
     --accent: #00AEEC;
     --accent-2: #FB7299;
     --glass-bg: rgba(255,255,255,0.04);
@@ -196,9 +202,26 @@ h1, h2, h3, h4 { color: var(--txt) !important; letter-spacing: -0.02em; }
 
 /* 侧边栏 */
 section[data-testid="stSidebar"] {
-    background: rgba(10,14,20,0.8) !important;
+    background: rgba(10,14,20,0.92) !important;
     backdrop-filter: blur(20px) !important;
-    border-right: 1px solid rgba(255,255,255,0.06) !important;
+    border-right: 1px solid rgba(255,255,255,0.08) !important;
+}
+section[data-testid="stSidebar"] .block-container {
+    color: #e0e4ec !important;
+}
+section[data-testid="stSidebar"] label {
+    color: #e8ecf4 !important;
+}
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] .stMarkdownContainer {
+    color: #d8dce6 !important;
+}
+section[data-testid="stSidebar"] .stCaptionContainer {
+    color: #b8c0cc !important;
+}
+section[data-testid="stSidebar"] hr {
+    border-top: 1px solid rgba(255,255,255,0.10) !important;
 }
 
 /* 数据表 */
@@ -219,14 +242,23 @@ hr {
 /* Streamlit 组件覆盖 — 标签文字统一亮色 */
 .stTextInput label, .stTextArea label, .stSelectbox label,
 .stNumberInput label, .stRadio label, .stCheckbox label {
-    color: var(--txt-2) !important;
+    color: #e4e8f0 !important;
     font-weight: 600 !important;
 }
 .stMarkdown, .stMarkdown p, .stMarkdown li { color: var(--txt-2) !important; }
-.stMetric label { color: var(--muted) !important; }
-.caption, .st-emotion-cache-10trblm, div[data-testid="stCaptionContainer"] {
-    color: var(--muted) !important;
+.stMetric label { color: #c8d0dc !important; }
+.caption, div[data-testid="stCaptionContainer"] {
+    color: #c0c8d4 !important;
+    opacity: 1 !important;
 }
+/* Streamlit 原生文字/提示/info box 对比度增强 */
+div[data-testid="stAlert"] { color: var(--txt) !important; }
+div[data-testid="stInfo"] { color: var(--txt) !important; }
+div[data-testid="stSuccess"] { color: var(--txt) !important; }
+div[data-testid="stWarning"] { color: var(--txt) !important; }
+div[data-testid="stError"] { color: var(--txt) !important; }
+div[data-testid="stMarkdownContainer"] p { color: var(--txt-2) !important; }
+.st-emotion-cache-10trblm { color: #c0c8d4 !important; }
 
 /* 标签 */
 .section-label {
@@ -301,11 +333,25 @@ def _load_from_json(mid: int) -> tuple[dict | None, pd.DataFrame]:
     return info, df
 
 
-def _fetch_live(mid: int, max_videos: int = 30) -> tuple[dict | None, pd.DataFrame]:
-    """从 B站 API 实时获取。"""
+def _fetch_live(
+    mid: int,
+    max_videos: int = 30,
+    user_cookie: str = "",
+    use_playwright: bool | None = None,
+) -> tuple[dict | None, pd.DataFrame]:
+    """从 B站 API 实时获取。
+
+    Args:
+        use_playwright: None=自动（优先 Playwright）, True=Playwright, False=requests+Cookie
+    """
     try:
         from bilibili_api import quick_fetch
-        info, df = quick_fetch(mid, max_videos=max_videos)
+        info, df = quick_fetch(
+            mid,
+            max_videos=max_videos,
+            user_cookie=user_cookie,
+            use_playwright=use_playwright,
+        )
         if df.empty:
             return None, pd.DataFrame()
         info_dict = {
@@ -315,21 +361,8 @@ def _fetch_live(mid: int, max_videos: int = 30) -> tuple[dict | None, pd.DataFra
         }
         return info_dict, df
     except Exception as e:
-        error_msg = str(e)
-        # 友好化错误信息
-        if "412" in error_msg or "banned" in error_msg.lower():
-            st.error(
-                f"❌ B站反爬拦截 (412) / Bilibili anti-bot blocked request.\n\n"
-                f"原因：B站检测到自动化请求。请稍后重试，或使用「缓存分析」加载已有数据。\n\n"
-                f"Reason: B站 detected automated requests. Try again later or use cached data.\n\n"
-                f"详细错误 / Detail: {error_msg}"
-            )
-        elif "404" in error_msg:
-            st.error(f"❌ UID {mid} 不存在 / UID {mid} not found")
-        elif "超时" in error_msg or "timeout" in error_msg.lower():
-            st.error(f"❌ 请求超时 / Request timeout: {error_msg}")
-        else:
-            st.error(f"❌ 实时 API 获取失败 / Live API failed: {error_msg}")
+        # 错误信息存在 session_state 里，供上层决定如何显示
+        st.session_state["_last_error"] = str(e)
         return None, pd.DataFrame()
 
 
@@ -548,50 +581,183 @@ st.markdown("""
 # ── 侧边栏 ────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🔍 选择 UP 主 / Select Creator")
+    st.markdown(
+        "<div style='font-size:0.7rem; color:var(--muted); margin-bottom:0.5rem;'>"
+        "💡 侧边栏可折叠：点击左上角 › 按钮展开 / Sidebar collapsed? Click › to expand"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-    # 预设列表 + 自定义选项
+    # 预设列表 + 自定义选项（默认选中自定义，让输入框始终可见）
     preset_labels = [f"{n} ({uid})" for n, uid in PRESET_UPS]
     preset_labels.append("✏️ 自定义 UID / Custom UID")
-    selected_preset = st.radio("预设 / Presets", preset_labels, index=0, key="preset_radio")
+    selected_preset = st.radio("预设 / Presets", preset_labels, index=len(preset_labels) - 1)
 
-    # 判断是否选了自定义
-    is_custom = selected_preset == "✏️ 自定义 UID / Custom UID"
-
-    # 预设 UID
-    selected_uid = PRESET_UPS[0][1]
-    if not is_custom:
+    # 根据选中的预设确定初始 UID
+    is_custom = "自定义" in selected_preset
+    if is_custom:
+        # 自定义模式：保留用户上次输入的值，不要覆盖
+        default_uid = st.session_state.get("custom_uid_input", 14476927)
+    else:
+        # 预设模式：强制使用预设 UID
         for name, uid in PRESET_UPS:
             if f"{name} ({uid})" == selected_preset:
-                selected_uid = uid
+                default_uid = uid
                 break
 
-    # 关键修复：预设切换时，通过 widget 的 key 直接修改 session_state
-    # Streamlit 有 key 的 widget 值存储在 session_state[key] 中
-    if "last_preset" not in st.session_state:
-        st.session_state["last_preset"] = selected_preset
-        st.session_state["uid_input_widget"] = selected_uid
-
-    if st.session_state["last_preset"] != selected_preset:
-        st.session_state["last_preset"] = selected_preset
+    # 关键：如果预设切换了，删掉旧 session_state 让新 value 生效
+    if "cached_preset" not in st.session_state:
+        st.session_state.cached_preset = selected_preset
+    if st.session_state.cached_preset != selected_preset:
+        # 预设变了 → 删掉 custom_uid_input，让 number_input 的 value= 生效
+        st.session_state.pop("custom_uid_input", None)
+        st.session_state.cached_preset = selected_preset
+        # 重新确定 default_uid（因为 pop 后需要用 value= 参数）
         if not is_custom:
-            # 直接修改 widget 对应的 session_state key，下一次 rerun 就会用新值
-            st.session_state["uid_input_widget"] = selected_uid
+            default_uid = next((uid for name, uid in PRESET_UPS if f"{name} ({uid})" == selected_preset), 14476927)
+        else:
+            default_uid = 14476927
 
-    # 自定义模式：初始化 uid_input_widget
-    if "uid_input_widget" not in st.session_state:
-        st.session_state["uid_input_widget"] = selected_uid
+    # 只有预设模式才强制同步 session_state → 防止预设切换时值不更新
+    # 自定义模式保留用户输入，不要 pop
+    if not is_custom:
+        if "custom_uid_input" in st.session_state:
+            if st.session_state.custom_uid_input != default_uid:
+                st.session_state.pop("custom_uid_input", None)
 
+    # 输入框始终可见，预设切换自动填充 UID
     uid_input = st.number_input(
-        "或输入 UID / Or enter UID",
-        step=1, format="%d",
-        key="uid_input_widget",
+        "输入 UID / Enter UID",
+        min_value=1, step=1, format="%d",
+        value=default_uid,
+        key="custom_uid_input",
     )
+    mid = int(uid_input)
+    st.caption("💡 输入任意 B站 UID，点击下方按钮分析 / Enter any Bilibili UID")
 
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         cached_btn = st.button("🚀 缓存分析", use_container_width=True)
     with col_btn2:
         live_btn = st.button("🌐 实时获取", use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### ⚙️ 抓取模式 / Fetch Mode")
+    # 检测 Playwright 是否可用
+    try:
+        from bilibili_api import is_playwright_available
+        _pw_avail = is_playwright_available()
+    except Exception as _e:
+        _pw_avail = False
+        # 调试：显示具体错误原因
+        st.warning(f"Playwright 检测异常: {_e}")
+        st.caption(f"sys.path[:3] = {sys.path[:3]}")
+
+    mode_opts = [
+        ("🤖 自动（推荐）/ Auto (Recommended)", None),
+    ]
+    if _pw_avail:
+        mode_opts.append(("🎭 Playwright 真实浏览器 / Playwright Browser", True))
+    mode_opts.append(("🍪 Cookie 模式 / Cookie Mode (requests)", False))
+
+    selected_mode_label = st.radio(
+        "抓取模式 / Fetch Mode",
+        [k for k, _ in mode_opts],
+        index=0,
+        help=(
+            "Playwright = 不需要 Cookie，安装后直接搜；"
+            "Cookie 模式 = 需要登录 B站 获得 Cookie 绕过反爬"
+        ),
+    )
+    # 拿到对应的 use_playwright 值
+    use_playwright: bool | None = next(
+        (v for k, v in mode_opts if k == selected_mode_label), None
+    )
+
+    if _pw_avail:
+        st.success("🎭 Playwright 已就绪 / Playwright ready — 无需 Cookie 即可搜索")
+    else:
+        if use_playwright is True:
+            st.error(
+                "❌ 选择了 Playwright 但未安装 / Playwright not installed.\n"
+                "安装命令（无需下浏览器，会自动复用系统 Chrome）:\n"
+                "```\n"
+                "pip install playwright\n"
+                "```\n"
+                "（如系统未装 Chrome/Edge，再执行：playwright install chromium）"
+            )
+        else:
+            st.info(
+                "💡 想直接搜索（无需 Cookie）？安装 Playwright：\n"
+                "```\n"
+                "pip install playwright\n"
+                "```\n"
+                "（自动复用系统 Chrome/Edge，不用额外下载浏览器；装完重启应用）"
+            )
+
+    st.markdown("---")
+    st.markdown("### 🔑 B站登录 / Bilibili Login")
+    # Cookie 模式下显示更详细的引导；Playwright 模式下可以跳过
+    if use_playwright is True or (use_playwright is None and _pw_avail):
+        st.caption(
+            "🎭 当前使用 Playwright，**不需要** Cookie 即可搜索任意 UID / "
+            "Playwright mode: no cookie needed for public data"
+        )
+        # 依然允许用户填 cookie（有 cookie 可以看更多权限字段）
+        with st.expander("🔑 可选：手动注入 Cookie / Optional: inject cookie"):
+            manual_cookie = st.text_input(
+                "粘贴 Cookie / Paste cookie",
+                value="",
+                type="password",
+                key="pw_manual_cookie",
+            )
+        user_cookie = manual_cookie if manual_cookie else ""
+    else:
+        # ── Cookie 模式的完整流程（兼容之前的逻辑） ──
+        # 自动从 Chrome 读取 Cookie
+        if "auto_cookie" not in st.session_state:
+            try:
+                from bilibili_api import auto_read_chrome_cookie
+                st.session_state.auto_cookie = auto_read_chrome_cookie()
+            except Exception:
+                st.session_state.auto_cookie = ""
+
+        # 手动重新读取按钮
+        if st.button("🔄 从 Chrome 重新读取 / Re-read from Chrome", use_container_width=True):
+            try:
+                from bilibili_api import auto_read_chrome_cookie
+                st.session_state.auto_cookie = auto_read_chrome_cookie()
+            except Exception as e:
+                st.session_state.auto_cookie = ""
+            st.rerun()
+
+        auto_cookie = st.session_state.get("auto_cookie", "")
+
+        if auto_cookie and "SESSDATA" in auto_cookie:
+            st.success("✅ 已从 Chrome 读取登录态 / Login cookie found")
+            user_cookie = auto_cookie
+        elif auto_cookie:
+            st.warning("⚠️ 读取到 Cookie 但未登录 / Cookie found but not logged in")
+            st.caption("在 Chrome 中登录 bilibili.com 后重启 / Log into bilibili.com in Chrome then restart")
+            user_cookie = auto_cookie  # 仍可用 buvid3 等
+        else:
+            st.warning("⚠️ 未读取到 Cookie / No Chrome cookie found")
+            st.caption(
+                "在 Chrome 登录 bilibili.com 后点上方按钮 / "
+                "Login bilibili.com in Chrome then click above"
+            )
+            user_cookie = ""
+
+        # 手动覆盖
+        manual_cookie = st.text_input(
+            "或手动粘贴 Cookie / Or paste manually",
+            value="",
+            type="password",
+            help="覆盖自动读取的 Cookie / Override auto-read cookie",
+        )
+        if manual_cookie:
+            user_cookie = manual_cookie
+            st.success("✅ 手动 Cookie 已注入 / Manual cookie injected")
 
     st.markdown("---")
     st.markdown("### 📦 导出 / Export")
@@ -609,168 +775,204 @@ with st.sidebar:
     )
 
 # ── 主内容区 ──────────────────────────────────────────────────────
-mid = int(uid_input)
 force_reload = cached_btn or live_btn
+mid_changed = st.session_state.get("current_mid") != mid
+error_state = st.session_state.get("error_state", False)
 
-if force_reload or "df_cache" not in st.session_state or st.session_state.get("current_mid") != mid:
+# 预设模式：切换时自动加载；自定义模式：必须点击按钮
+should_load = force_reload or "df_cache" not in st.session_state or (not is_custom and mid_changed)
+
+if should_load:
+    info = None
+    df = pd.DataFrame()
+    # 搜索新 UID 时，清除旧缓存，避免显示旧数据
+    if mid_changed or force_reload:
+        st.session_state.pop("df_cache", None)
+        st.session_state.pop("info_cache", None)
+        error_state = False
+
     if live_btn:
-        # 实时获取模式：先尝试实时 API，失败再回退到缓存
-        with st.spinner("🌐 实时获取中... / Fetching live data..."):
-            info, df = _fetch_live(mid)
+        # ── 实时获取模式 ──
+        with st.spinner("🌐 正在从 B站 实时获取... / Fetching live data from Bilibili..."):
+            info, df = _fetch_live(mid, user_cookie=user_cookie, use_playwright=use_playwright)
             if info is None or df.empty:
-                # 实时失败，回退到缓存
-                st.warning("⚠️ 实时获取失败，正在加载缓存数据... / Live fetch failed, loading cached data...")
                 info, df = _load_from_json(mid)
-                if info is not None and not df.empty:
-                    st.info("💡 已回退到缓存数据 / Fallback to cached data")
     else:
-        # 缓存分析模式：先尝试 JSON 缓存，没有就自动回退到实时 API
-        with st.spinner("加载缓存数据... / Loading cached data..."):
-            info, df = _load_from_json(mid)
-            # 关键修复：任何 UID 缓存不存在都自动尝试实时获取，不限于预设
-            if info is None or df.empty:
-                st.warning("⚠️ 缓存不存在，正在从 B站 实时获取... / Cache not found, fetching from Bilibili API...")
-                with st.spinner("🌐 实时获取中... / Fetching live data..."):
-                    info, df = _fetch_live(mid)
-                    if info is not None and not df.empty:
-                        # 实时获取成功，自动保存为缓存
-                        try:
-                            cache_path = os.path.join(DATA_DIR, f"up_{mid}.json")
-                            cache_data = {
-                                "info": info if isinstance(info, dict) else vars(info),
-                                "videos": df.to_dict(orient="records"),
-                            }
-                            with open(cache_path, "w", encoding="utf-8") as f:
-                                json.dump(cache_data, f, ensure_ascii=False, indent=2, default=str)
-                        except Exception:
-                            pass  # 保存缓存失败不影响展示
+        # ── 缓存分析模式（默认） ──
+        # 1. 先尝试缓存
+        info, df = _load_from_json(mid)
 
-    # 最终检查数据是否可用
-    if info is None or df.empty:
-        st.markdown(f"""
-        <div class="glass" style="text-align:center; padding:2rem;">
-            <div style="font-size:2rem; margin-bottom:0.5rem;">🔍</div>
-            <div style="color:var(--muted);">
-                UID {mid} 无数据。请检查 UID 是否正确，或选择预设 UP 主。<br>
-                No data for UID {mid}. Check UID or select a preset creator.
+        # 2. 缓存不存在 → 自动尝试实时 API
+        if info is None or df.empty:
+            with st.spinner("🌐 缓存未找到，正在获取... / Cache miss, fetching..."):
+                info, df = _fetch_live(mid, user_cookie=user_cookie, use_playwright=use_playwright)
+                if info is not None and not df.empty:
+                    # 实时成功 → 自动保存为缓存
+                    try:
+                        cache_path = os.path.join(DATA_DIR, f"up_{mid}.json")
+                        info_dict = info if isinstance(info, dict) else vars(info)
+                        videos_list = []
+                        for _, row in df.iterrows():
+                            record = {}
+                            for col in df.columns:
+                                val = row[col]
+                                if pd.notna(val) and isinstance(val, (pd.Timestamp,)):
+                                    record[col] = val.isoformat()
+                                elif pd.isna(val):
+                                    record[col] = None
+                                else:
+                                    record[col] = val if not isinstance(val, (pd.Timestamp,)) else str(val)
+                            videos_list.append(record)
+                        cache_data = {"info": info_dict, "videos": videos_list}
+                        os.makedirs(DATA_DIR, exist_ok=True)
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            json.dump(cache_data, f, ensure_ascii=False, indent=2, default=str)
+                        st.success(f"✅ 数据已缓存 / Data cached: {cache_path}")
+                    except Exception as e:
+                        st.warning(f"⚠️ 缓存保存失败（不影响展示）/ Cache save failed: {e}")
+
+        # 3. 缓存和实时都失败
+        if info is None or df.empty:
+            error_state = True
+            st.session_state["error_state"] = True
+            st.session_state["error_mid"] = mid
+        else:
+            error_state = False
+            st.session_state["error_state"] = False
+
+    if not error_state:
+        st.session_state["df_cache"] = df
+        st.session_state["info_cache"] = info
+        st.session_state["current_mid"] = mid
+        st.session_state["error_state"] = False
+
+# ── 条件渲染：错误页 / 数据页 / 空状态页 ────────────────────────
+if error_state:
+    err_mid = st.session_state.get("error_mid", mid)
+    err_detail = st.session_state.get("_last_error", "未知错误")
+    st.markdown(f"""
+    <div class="glass" style="text-align:center; padding:2rem;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">😵</div>
+        <div style="color:var(--txt); font-size:1.1rem; margin-bottom:0.5rem;">
+            UID {err_mid} 数据无法加载
+        </div>
+        <div style="color:var(--muted); font-size:0.9rem;">
+            错误 / Error: {err_detail}<br><br>
+            💡 建议：在侧边栏粘贴 B站 Cookie 后重试 / Paste Bilibili Cookie in sidebar and retry.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+elif "df_cache" in st.session_state and not st.session_state["df_cache"].empty:
+    df = st.session_state["df_cache"]
+    info = st.session_state["info_cache"]
+
+    # ── UP 主头部 ─────────────────────────────────────────────────────
+    name = info.get("name", "Unknown")
+    followers = info.get("followers", 0)
+    video_count = info.get("video_count", len(df))
+
+    st.markdown(f"""
+    <div class="up-header">
+        <div class="up-avatar">{name[0] if name else "?"}</div>
+        <div style="flex:1;">
+            <div class="up-name">{name}</div>
+            <div class="up-meta">
+                UID: {mid} · 📊 粉丝 / Followers: <b style="color:var(--accent)">{_fmt_num(followers)}</b> ·
+                🎬 视频 / Videos: <b style="color:var(--accent-2)">{video_count}</b>
             </div>
         </div>
-        """, unsafe_allow_html=True)
-        st.stop()
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.session_state["df_cache"] = df
-    st.session_state["info_cache"] = info
-    st.session_state["current_mid"] = mid
+    # ── KPI 卡片 ─────────────────────────────────────────────────────
+    total_views = int(df["views"].sum())
+    total_comments = int(df["comments"].sum())
+    avg_views = int(df["views"].mean())
+    max_views = int(df["views"].max())
+    avg_er = round(df["engagement_rate"].mean(), 2)
+    recent_30 = df[df["date"] >= pd.Timestamp.now() - pd.Timedelta(days=30)]
+    recent_views = int(recent_30["views"].sum()) if len(recent_30) > 0 else 0
 
-df = st.session_state.get("df_cache")
-info = st.session_state.get("info_cache")
+    kpi_data = [
+        ("总播放量 / Total Views", _fmt_num(total_views), f"{total_views:,}"),
+        ("粉丝数 / Followers", _fmt_num(followers), f"{followers:,}"),
+        ("视频总数 / Total Videos", str(video_count), f"抓取 {len(df)} 条"),
+        ("总评论 / Comments", _fmt_num(total_comments), f"{total_comments:,}"),
+        ("平均播放 / Avg Views", _fmt_num(avg_views), f"{avg_views:,}"),
+        ("最高单作 / Top Video", _fmt_num(max_views), f"{max_views:,}"),
+        ("互动率 / Engagement", f"{avg_er}%", "平均互动率"),
+        ("近30天 / 30d Views", _fmt_num(recent_views), f"{recent_views:,}"),
+    ]
 
-if df is None or info is None or df.empty:
+    kpi_html = '<div class="kpi-grid">'
+    for label, value, sub in kpi_data:
+        kpi_html += f"""
+        <div class="kpi-card">
+            <div class="label">{label}</div>
+            <div class="value">{value}</div>
+            <div class="sub">{sub}</div>
+        </div>"""
+    kpi_html += "</div>"
+    st.markdown(kpi_html, unsafe_allow_html=True)
+
+    # ── 图表区 ────────────────────────────────────────────────────────
+    st.markdown('<div class="section-label"><span class="num">1</span> 📈 数据可视化 / Visualizations</div>', unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.plotly_chart(_plot_trend(df), use_container_width=True)
+    with col_b:
+        st.plotly_chart(_plot_top_videos(df), use_container_width=True)
+
+    col_c, col_d = st.columns(2)
+    with col_c:
+        st.plotly_chart(_plot_monthly(df), use_container_width=True)
+    with col_d:
+        st.plotly_chart(_plot_engagement(df), use_container_width=True)
+
+    st.plotly_chart(_plot_heatmap(df), use_container_width=True)
+
+    # ── 洞察 ─────────────────────────────────────────────────────────
+    st.markdown('<div class="section-label"><span class="num">2</span> 💡 数据洞察 / Insights</div>', unsafe_allow_html=True)
+
+    insights = _generate_insights(df, info)
+    insights_html = '<div class="glass" style="padding:1rem;">'
+    for ins in insights:
+        insights_html += f'<div class="insight-item">{ins}</div>'
+    insights_html += '</div>'
+    st.markdown(insights_html, unsafe_allow_html=True)
+
+    # ── 数据表 ───────────────────────────────────────────────────────
+    st.markdown('<div class="section-label"><span class="num">3</span> 📋 视频数据表 / Video Data Table</div>', unsafe_allow_html=True)
+
+    table_df = df.head(50)[["title", "date", "views", "likes", "favorites", "comments", "engagement_rate"]].copy()
+    table_df.columns = ["标题 / Title", "日期 / Date", "播放 / Views", "点赞 / Likes",
+                         "投币 / Favorites", "评论 / Comments", "互动率 / ER%"]
+    table_df["日期 / Date"] = table_df["日期 / Date"].dt.strftime("%Y-%m-%d")
+    st.dataframe(table_df, use_container_width=True, height=400)
+
+    # ── 导出 ─────────────────────────────────────────────────────────
+    if export_btn:
+        csv = df.to_csv(index=False, encoding="utf-8-sig")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8-sig") as f:
+            f.write(csv)
+            tmp_path = f.name
+        st.download_button(
+            label="⬇️ 下载 CSV / Download CSV",
+            data=csv.encode("utf-8-sig"),
+            file_name=f"bilibili_{mid}_data.csv",
+            mime="text/csv",
+        )
+        st.success("CSV 已生成，点击上方按钮下载 / CSV ready, click button above to download")
+
+else:
+    # 空状态：首次打开或没有数据
     st.markdown("""
     <div class="glass" style="text-align:center; padding:2rem;">
         <div style="color:var(--muted);">请选择 UP 主并点击分析按钮 / Please select a creator and click Analyze</div>
     </div>
     """, unsafe_allow_html=True)
-    st.stop()
-
-# ── UP 主头部 ─────────────────────────────────────────────────────
-name = info.get("name", "Unknown")
-followers = info.get("followers", 0)
-video_count = info.get("video_count", len(df))
-
-st.markdown(f"""
-<div class="up-header">
-    <div class="up-avatar">{name[0] if name else "?"}</div>
-    <div style="flex:1;">
-        <div class="up-name">{name}</div>
-        <div class="up-meta">
-            UID: {mid} · 📊 粉丝 / Followers: <b style="color:var(--accent)">{_fmt_num(followers)}</b> ·
-            🎬 视频 / Videos: <b style="color:var(--accent-2)">{video_count}</b>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── KPI 卡片 ─────────────────────────────────────────────────────
-total_views = int(df["views"].sum())
-total_comments = int(df["comments"].sum())
-avg_views = int(df["views"].mean())
-max_views = int(df["views"].max())
-avg_er = round(df["engagement_rate"].mean(), 2)
-recent_30 = df[df["date"] >= pd.Timestamp.now() - pd.Timedelta(days=30)]
-recent_views = int(recent_30["views"].sum()) if len(recent_30) > 0 else 0
-
-kpi_data = [
-    ("总播放量 / Total Views", _fmt_num(total_views), f"{total_views:,}"),
-    ("粉丝数 / Followers", _fmt_num(followers), f"{followers:,}"),
-    ("视频总数 / Total Videos", str(video_count), f"抓取 {len(df)} 条"),
-    ("总评论 / Comments", _fmt_num(total_comments), f"{total_comments:,}"),
-    ("平均播放 / Avg Views", _fmt_num(avg_views), f"{avg_views:,}"),
-    ("最高单作 / Top Video", _fmt_num(max_views), f"{max_views:,}"),
-    ("互动率 / Engagement", f"{avg_er}%", "平均互动率"),
-    ("近30天 / 30d Views", _fmt_num(recent_views), f"{recent_views:,}"),
-]
-
-kpi_html = '<div class="kpi-grid">'
-for label, value, sub in kpi_data:
-    kpi_html += f"""
-    <div class="kpi-card">
-        <div class="label">{label}</div>
-        <div class="value">{value}</div>
-        <div class="sub">{sub}</div>
-    </div>"""
-kpi_html += "</div>"
-st.markdown(kpi_html, unsafe_allow_html=True)
-
-# ── 图表区 ────────────────────────────────────────────────────────
-st.markdown('<div class="section-label"><span class="num">1</span> 📈 数据可视化 / Visualizations</div>', unsafe_allow_html=True)
-
-col_a, col_b = st.columns(2)
-with col_a:
-    st.plotly_chart(_plot_trend(df), use_container_width=True)
-with col_b:
-    st.plotly_chart(_plot_top_videos(df), use_container_width=True)
-
-col_c, col_d = st.columns(2)
-with col_c:
-    st.plotly_chart(_plot_monthly(df), use_container_width=True)
-with col_d:
-    st.plotly_chart(_plot_engagement(df), use_container_width=True)
-
-st.plotly_chart(_plot_heatmap(df), use_container_width=True)
-
-# ── 洞察 ─────────────────────────────────────────────────────────
-st.markdown('<div class="section-label"><span class="num">2</span> 💡 数据洞察 / Insights</div>', unsafe_allow_html=True)
-
-insights = _generate_insights(df, info)
-insights_html = '<div class="glass" style="padding:1rem;">'
-for ins in insights:
-    insights_html += f'<div class="insight-item">{ins}</div>'
-insights_html += '</div>'
-st.markdown(insights_html, unsafe_allow_html=True)
-
-# ── 数据表 ───────────────────────────────────────────────────────
-st.markdown('<div class="section-label"><span class="num">3</span> 📋 视频数据表 / Video Data Table</div>', unsafe_allow_html=True)
-
-table_df = df.head(50)[["title", "date", "views", "likes", "favorites", "comments", "engagement_rate"]].copy()
-table_df.columns = ["标题 / Title", "日期 / Date", "播放 / Views", "点赞 / Likes",
-                     "投币 / Favorites", "评论 / Comments", "互动率 / ER%"]
-table_df["日期 / Date"] = table_df["日期 / Date"].dt.strftime("%Y-%m-%d")
-st.dataframe(table_df, use_container_width=True, height=400)
-
-# ── 导出 ─────────────────────────────────────────────────────────
-if export_btn:
-    csv = df.to_csv(index=False, encoding="utf-8-sig")
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8-sig") as f:
-        f.write(csv)
-        tmp_path = f.name
-    st.download_button(
-        label="⬇️ 下载 CSV / Download CSV",
-        data=csv.encode("utf-8-sig"),
-        file_name=f"bilibili_{mid}_data.csv",
-        mime="text/csv",
-    )
-    st.success("CSV 已生成，点击上方按钮下载 / CSV ready, click button above to download")
 
 # ── 页脚 ──────────────────────────────────────────────────────────
 st.markdown("""

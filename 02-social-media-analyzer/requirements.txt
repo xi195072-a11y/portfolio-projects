@@ -2,3 +2,11 @@ streamlit>=1.30.0
 plotly>=5.0.0
 pandas>=2.0.0
 requests>=2.28.0
+
+# ==========================================================================
+# 可选依赖 / Optional: Playwright（推荐安装，无需 Cookie 就能直接搜索任意 UID）
+#   只需要 pip install playwright，不需要额外下载浏览器
+#   （会自动复用你系统里已经装的 Chrome / Edge / Chromium）
+#   如果系统没装 Chrome/Edge，再执行：playwright install chromium
+# --------------------------------------------------------------------------
+playwright>=1.40.0
